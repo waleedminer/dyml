@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Waqf Orchard School · Explore</title>
+  <meta name="description" content="An interactive 3D model of a school orchard in Sierra Leone: what is grown, how it is preserved, and how it feeds and sustains the community." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body class="explore">
+  <canvas id="scene" aria-label="3D model of the school and orchard"></canvas>
+  <div id="hotspots" aria-label="Points of interest"></div>
+
+  <header class="topbar">
+    <a class="brand" href="index.html"><span class="brand-mark">◆</span> Waqf Orchard School</a>
+    <nav>
+      <a href="index.html" class="active">Explore 3D</a>
+      <a href="project.html">The Project</a>
+    </nav>
+  </header>
+
+  <section id="intro" class="card intro">
+    <p class="eyebrow">Sierra Leone · DYML prototype</p>
+    <h1>A school that grows its own future</h1>
+    <p>Explore a 3D model of a school orchard designed to give students food, skills and income, and to keep giving for generations.</p>
+    <div class="actions">
+      <button class="btn primary" id="startTour">▶ Take the 2-minute tour</button>
+      <button class="btn" id="freeExplore">Explore freely</button>
+    </div>
+    <p class="hint">Click the glowing dots to see what is grown, how it is preserved, and more.</p>
+  </section>
+
+  <aside id="panel" class="card panel" aria-live="polite" hidden>
+    <button class="close" id="panelClose" aria-label="Close">×</button>
+    <p class="eyebrow" id="panelKicker"></p>
+    <h2 id="panelTitle"></h2>
+    <p id="panelSummary" class="summary"></p>
+    <div id="panelBody"></div>
+  </aside>
+
+  <section id="tour" class="card tour" hidden>
+    <div class="tour-head">
+      <span class="tag" id="tourTag"></span>
+      <span class="steps" id="tourSteps"></span>
+      <button class="close" id="tourClose" aria-label="End tour">×</button>
+    </div>
+    <h2 id="tourTitle"></h2>
+    <p id="tourText"></p>
+    <div class="tour-nav">
+      <button class="btn" id="tourPrev">← Back</button>
+      <a class="btn" id="tourCta" href="project.html" hidden>Read the project →</a>
+      <button class="btn primary" id="tourNext">Next →</button>
+    </div>
+  </section>
+
+  <div class="toolbar">
+    <button class="tool" id="btnTour" title="Guided tour">▶ Tour</button>
+    <button class="tool" id="btnWalk" title="Walk around at eye level">🚶 Walk</button>
+    <button class="tool" id="btnOverview" title="Reset view">⌂ Overview</button>
+  </div>
+  <p class="controls-hint" id="controlsHint">Drag to orbit · Scroll to zoom · Right-drag to pan</p>
+
+  <div id="loader"><div class="spinner"></div><p>Planting the orchard…</p></div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
