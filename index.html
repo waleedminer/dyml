@@ -64,6 +64,34 @@
     </div>
   </section>
 
+  <div id="walkHud" class="walk-hud" hidden>
+    <div class="crosshair"></div>
+    <button class="hud-chip hud-esc" id="hudMenu" type="button"><kbd>Esc</kbd> Menu</button>
+    <div class="hud-chip hud-basket" id="basket" hidden></div>
+    <div class="prompt" id="prompt" hidden><kbd>E</kbd><span></span></div>
+    <div class="toast" id="toast" hidden></div>
+  </div>
+
+  <section id="walkMenu" class="card walk-menu" hidden>
+    <p class="eyebrow">Walk mode · Paused</p>
+    <h2>Walk the orchard school</h2>
+    <ul class="keys">
+      <li><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span> Move</li>
+      <li><span><kbd>Mouse</kbd></span> Look around</li>
+      <li><span><kbd>Space</kbd></span> Jump</li>
+      <li><span><kbd>Shift</kbd></span> Run</li>
+      <li><span><kbd>E</kbd> / <kbd>Click</kbd></span> Open doors, read, pick fruit</li>
+      <li><span><kbd>Esc</kbd></span> This menu</li>
+    </ul>
+    <p class="hint">Try the classrooms, the library and the cool store. Pick fruit in the orchard, then load it onto the truck or share it at lunch.</p>
+    <div class="actions">
+      <button class="btn primary" id="wmResume">▶ Resume walking</button>
+      <button class="btn" id="wmOverview">Back to overview</button>
+      <button class="btn" id="wmMenu">Main menu</button>
+    </div>
+    <p class="hint note" id="wmNote"></p>
+  </section>
+
   <div class="toolbar">
     <button class="tool" id="btnTour" title="Guided tour">▶ Tour</button>
     <button class="tool" id="btnWalk" title="Walk around at eye level">🚶 Walk</button>

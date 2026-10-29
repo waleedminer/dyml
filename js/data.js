@@ -239,3 +239,59 @@ export const TOUR = [
     cta: true,
   },
 ];
+
+// Info for things you can inspect inside the buildings in walk mode.
+export const INFO = {
+  classA: {
+    title: 'Orchard Science Classroom', kicker: 'Inside the school · Term 1 lesson',
+    summary: 'Today’s lesson is Soil & Seeds. Students test soil, mix compost and sow seeds, then walk out to the nursery to do it for real.',
+    sections: [
+      { h: 'Lesson flow (draft)', placeholder: true, items: ['Warm-up: what makes soil healthy?', 'Demo at the board, then small-group soil tests', 'Sow seeds in nursery trays; each group labels its tray', 'Reflection: stewardship (khalifa) of the land we were given'] },
+      { h: 'What students take home', items: ['How to test and improve soil at home', 'A seedling to plant with their family'] },
+    ],
+  },
+  classB: {
+    title: 'Harvest & Preserve Lab', kicker: 'Inside the school · Term 3 lesson',
+    summary: 'Hands-on preserving: students slice, dry and jar fruit so the harvest lasts for months and sells for more.',
+    sections: [
+      { h: 'At the tables', items: ['Seedling trays for the next planting', 'Fresh mango sliced thin for the solar dryer', 'Dried mango packed in clean, dated jars'] },
+      { h: 'Lesson plan', placeholder: true, items: ['Food safety and hygiene steps', 'Drying times and quality checks', 'Assessment rubric'] },
+    ],
+  },
+  seedBank: {
+    title: 'Seed Bank', kicker: 'Classroom shelf',
+    summary: 'Students save seeds from the best trees each season, so the orchard improves over time and seeds cost nothing.',
+    sections: [{ h: 'On the shelf', items: ['Mango, papaya and citrus seeds, dried and labeled', 'Notes on which tree each seed came from', 'Species list to be confirmed with local experts'] }],
+  },
+  term1: { title: 'Term 1 · Soil & seeds', kicker: 'Curriculum poster', summary: 'The year starts underground: healthy soil and strong seedlings.', sections: [{ h: 'Topics (draft)', placeholder: true, items: ['Soil testing and compost making', 'Raising seedlings in the nursery', '[Lesson plans TBD]'] }] },
+  term2: { title: 'Term 2 · Growing', kicker: 'Curriculum poster', summary: 'Keeping young trees alive through the dry season.', sections: [{ h: 'Topics (draft)', placeholder: true, items: ['Planting, mulching and drip irrigation', 'Pruning, grafting and pest scouting', '[Lesson plans TBD]'] }] },
+  term3: { title: 'Term 3 · Harvest & preserve', kicker: 'Curriculum poster', summary: 'Picking at the right time and making food last.', sections: [{ h: 'Topics (draft)', placeholder: true, items: ['Picking and grading', 'Solar drying, juicing and storage', '[Lesson plans TBD]'] }] },
+  term4: { title: 'Term 4 · Orchard business', kicker: 'Curriculum poster', summary: 'Turning surplus into income the community controls.', sections: [{ h: 'Topics (draft)', placeholder: true, items: ['Record keeping and pricing', 'Selling at market and saving', '[Lesson plans TBD]'] }] },
+  values: {
+    title: 'Khalifa: Stewards of the Earth', kicker: 'Values poster',
+    summary: 'The orchard is a trust. Caring for it, and sharing what it gives, is part of faith as well as farming.',
+    sections: [{ h: 'Woven through every term', items: ['Stewardship (khalifa) of land, water and trees', 'Gratitude and sharing: zakah and sadaqah from the harvest', 'Waqf: an endowment that keeps giving across generations'] }],
+  },
+  orchardMap: {
+    title: 'Our Orchard', kicker: 'Map poster',
+    summary: 'Three blocks timed so the orchard feeds and earns from year one while the long-term trees mature.',
+    sections: [{ h: 'Blocks', items: ['Mango & cashew: long-term backbone', 'Citrus: mid-term, steady market crop', 'Banana, plantain & papaya: quick returns in year one', 'Exact layout and spacing to be confirmed'] }],
+  },
+  library: {
+    title: 'Library', kicker: 'Admin block',
+    summary: 'A quiet room for reading, homework and farming references that students and families can borrow.',
+    sections: [{ h: 'On the shelves (to be stocked)', placeholder: true, items: ['Practical farming and orchard handbooks', 'Quran and Islamic studies', 'Stories, science and maths readers'] }],
+  },
+  ledger: {
+    title: 'Orchard Accounts', kicker: 'Records office · Income plan',
+    summary: 'Every crate sold is written down. Students keep the books as part of the business term, so the income stays transparent.',
+    sections: [
+      { h: 'Income plan (draft)', placeholder: true, items: ['Revenue split: orchard upkeep · school fund · participating families', 'Prices and volumes to be confirmed with local buyers', 'Monthly report shared with families and the Ihsan team'] },
+    ],
+  },
+  coolStore: {
+    title: 'Cool Store', kicker: 'How food is preserved',
+    summary: 'A shaded store with no electricity. Zeer pots (a clay pot inside a larger one, with wet sand between) keep produce cool as the water evaporates.',
+    sections: [{ h: 'What’s stored here', items: ['Fresh fruit in zeer pots for the next market run', 'Jars of dried mango and banana chips', 'Graded crates waiting for the truck', 'Storage times to be tested on site'] }],
+  },
+};
