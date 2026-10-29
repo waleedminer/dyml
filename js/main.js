@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { HOTSPOTS, TOUR, INFO } from './data.js';
+import { initComments } from './comments.js';
 
 // ---------------------------------------------------------------------------
 // Renderer, scene, camera
@@ -24,13 +24,6 @@ const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 20
 const OVERVIEW = { cam: [-62, 42, 72], target: [6, 0, 0] };
 camera.position.fromArray(OVERVIEW.cam);
 
-const controls = new OrbitControls(camera, canvas);
-controls.target.fromArray(OVERVIEW.target);
-controls.enableDamping = true;
-controls.dampingFactor = 0.08;
-controls.maxPolarAngle = Math.PI / 2 - 0.06;
-controls.minDistance = 4;
-controls.maxDistance = 170;
 
 // ---------------------------------------------------------------------------
 // Sky, sun, environment lighting
@@ -38,6 +31,7 @@ controls.maxDistance = 170;
 const sun = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(52), THREE.MathUtils.degToRad(215));
 const sky = new Sky();
 sky.scale.setScalar(4000);
+sky.userData.noPick = true;
 const su = sky.material.uniforms;
 su.turbidity.value = 7;
 su.rayleigh.value = 1.4;
@@ -674,6 +668,7 @@ for (let i = 0; i < 26; i++) bush(rr(-48, 52), pick([rr(37, 50), rr(-45, -32)]),
     k++;
   }
   im.receiveShadow = true;
+  im.userData.noPick = true;
   scene.add(im);
 }
 
@@ -1322,9 +1317,9 @@ function openHotspot(id, fly) {
   const h = HOTSPOTS.find((x) => x.id === id);
   if (!h) return;
   renderPanel(h);
-  hideIntro();
+  hideMenu();
   hsEls.forEach((x) => x.el.classList.toggle('active', x.h.id === id));
-  if (fly) { if (walk.on) setWalk(false, { silent: true }); if (tourIdx >= 0) endTour(); flyTo(h.view); }
+  if (fly) { if (mode === 'walk') leaveWalk(true); if (tourIdx >= 0) endTour(); flyTo(h.view); }
 }
 // Walk mode: show info without moving the camera; it closes when you walk away or press E.
 function showInfo(h) {
@@ -1340,37 +1335,140 @@ function closePanel() {
 document.getElementById('panelClose').addEventListener('click', closePanel);
 
 // ---------------------------------------------------------------------------
+// Camera orientation, shared by Explore (fly) and Walk
+// ---------------------------------------------------------------------------
+const view = { yaw: 0, pitch: 0, yawT: 0, pitchT: 0 };
+const _euler = new THREE.Euler();
+function syncViewFromCamera() {
+  _euler.setFromQuaternion(camera.quaternion, 'YXZ');
+  view.yaw = view.yawT = _euler.y;
+  view.pitch = view.pitchT = _euler.x;
+}
+camera.lookAt(new THREE.Vector3(...OVERVIEW.target));
+syncViewFromCamera();
+
+// ---------------------------------------------------------------------------
 // Camera flights: duration scales with distance, same easing everywhere
 // ---------------------------------------------------------------------------
 let flight = null;
-function flyTo(view, dur, onDone) {
-  const p1 = new THREE.Vector3(...view.cam), t1 = new THREE.Vector3(...view.target);
-  const dist = camera.position.distanceTo(p1) + controls.target.distanceTo(t1) * 0.5;
+function flyTo(v, dur, onDone) {
+  const p1 = new THREE.Vector3(...v.cam), t1 = new THREE.Vector3(...v.target);
+  const fwd = camera.getWorldDirection(new THREE.Vector3());
+  const t0 = camera.position.clone().addScaledVector(fwd, Math.max(6, p1.distanceTo(t1)));
+  const dist = camera.position.distanceTo(p1) + t0.distanceTo(t1) * 0.3;
   flight = {
     t: 0, dur: dur ?? THREE.MathUtils.clamp(1 + dist / 70, 1.2, 2.4),
-    p0: camera.position.clone(), p1,
-    t0: controls.target.clone(), t1,
+    p0: camera.position.clone(), p1, t0, t1,
     lift: dist > 30 ? Math.min(16, dist * 0.18) : 0,
     onDone,
   };
-  controls.enableDamping = false;
-  controls.update();
-  controls.enabled = false;
+  fly.vel.set(0, 0, 0);
 }
+const _target = new THREE.Vector3();
 function updateFlight(dt) {
   if (!flight) return;
   flight.t = Math.min(1, flight.t + dt / flight.dur);
   const k = ease(flight.t);
   camera.position.lerpVectors(flight.p0, flight.p1, k).y += Math.sin(Math.PI * k) * flight.lift;
-  controls.target.lerpVectors(flight.t0, flight.t1, k);
-  camera.lookAt(controls.target);
+  camera.lookAt(_target.lerpVectors(flight.t0, flight.t1, k));
   if (flight.t >= 1) {
     const done = flight.onDone;
     flight = null;
-    if (!walk.on) { controls.enabled = true; controls.enableDamping = true; }
+    syncViewFromCamera();
     done?.();
   }
 }
+
+// ---------------------------------------------------------------------------
+// Explore mode: free-flying camera, like a spectator.
+// Drag to look, WASD to fly where you look, Space/Shift up and down,
+// scroll to glide forward, right-drag to pan. Speed scales with altitude.
+// ---------------------------------------------------------------------------
+const keys = new Set();
+const capture = (e) => { try { canvas.setPointerCapture(e.pointerId); } catch { /* synthetic or already released */ } };
+const fly = { vel: new THREE.Vector3(), pointers: new Map(), pinch: null, moved: 0 };
+const _f = new THREE.Vector3(), _r = new THREE.Vector3(), _w = new THREE.Vector3();
+const aboveGround = () => camera.position.y - height(camera.position.x, camera.position.z);
+const typing = (e) => { const t = e?.target || document.activeElement; return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable); };
+
+function updateExplore(dt) {
+  view.yaw = damp(view.yaw, view.yawT, 20, dt);
+  view.pitch = damp(view.pitch, view.pitchT, 20, dt);
+  camera.rotation.set(view.pitch, view.yaw, 0, 'YXZ');
+  const f = (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0) - (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0);
+  const s = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0);
+  const u = (keys.has('Space') || keys.has('KeyE') ? 1 : 0) - (keys.has('ShiftLeft') || keys.has('ShiftRight') || keys.has('KeyQ') ? 1 : 0);
+  camera.getWorldDirection(_f);
+  _r.set(Math.cos(view.yaw), 0, -Math.sin(view.yaw));
+  _w.set(0, 0, 0).addScaledVector(_f, f).addScaledVector(_r, s);
+  _w.y += u;
+  if (_w.lengthSq() > 1) _w.normalize();
+  const speed = THREE.MathUtils.clamp(8 + aboveGround() * 0.8, 8, 70);
+  fly.vel.x = damp(fly.vel.x, _w.x * speed, 5, dt);
+  fly.vel.y = damp(fly.vel.y, _w.y * speed, 5, dt);
+  fly.vel.z = damp(fly.vel.z, _w.z * speed, 5, dt);
+  const p = camera.position.addScaledVector(fly.vel, dt);
+  p.x = THREE.MathUtils.clamp(p.x, -260, 260);
+  p.z = THREE.MathUtils.clamp(p.z, -260, 260);
+  p.y = THREE.MathUtils.clamp(p.y, height(p.x, p.z) + 0.8, 160);
+}
+function flyLook(dx, dy) {
+  view.yawT -= dx * 0.0032;
+  view.pitchT = THREE.MathUtils.clamp(view.pitchT - dy * 0.0032, -1.52, 1.52);
+}
+function flyPan(dx, dy) {
+  const k = Math.max(3, aboveGround()) * 0.0018;
+  _r.set(Math.cos(view.yaw), 0, -Math.sin(view.yaw));
+  _f.set(-Math.sin(view.yaw), 0, -Math.cos(view.yaw));
+  camera.position.addScaledVector(_r, -dx * k).addScaledVector(_f, dy * k);
+}
+function flyDolly(amount) {
+  camera.getWorldDirection(_f);
+  fly.vel.addScaledVector(_f, amount * THREE.MathUtils.clamp(aboveGround() * 0.012, 0.04, 1.4));
+}
+function exploreInput() {
+  // First real movement dismisses the main menu and any guided tour
+  if (!intro.hidden) hideMenu();
+  if (tourIdx >= 0 && !flight) endTour();
+}
+const pinchInfo = () => {
+  const ps = [...fly.pointers.values()];
+  const cx = (ps[0].x + ps[1].x) / 2, cy = (ps[0].y + ps[1].y) / 2;
+  return { cx, cy, spread: Math.hypot(ps[0].x - ps[1].x, ps[0].y - ps[1].y) };
+};
+canvas.addEventListener('pointerdown', (e) => {
+  if (mode === 'walk') return walkPointerDown(e);
+  if (flight) return;
+  capture(e);
+  fly.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, button: e.button });
+  fly.moved = 0;
+  fly.pinch = fly.pointers.size === 2 ? pinchInfo() : null;
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (mode === 'walk') return walkPointerMove(e);
+  const p = fly.pointers.get(e.pointerId);
+  if (!p || flight) return;
+  const dx = e.clientX - p.x, dy = e.clientY - p.y;
+  p.x = e.clientX; p.y = e.clientY;
+  fly.moved += Math.abs(dx) + Math.abs(dy);
+  if (fly.moved > 4) exploreInput();
+  if (fly.pointers.size >= 2) {
+    const now = pinchInfo();
+    if (fly.pinch) { flyDolly((now.spread - fly.pinch.spread) * 1.5); flyPan(now.cx - fly.pinch.cx, now.cy - fly.pinch.cy); }
+    fly.pinch = now;
+  } else if (p.button === 2 || p.button === 1) flyPan(dx, dy);
+  else flyLook(dx, dy);
+});
+const endPointer = (e) => { fly.pointers.delete(e.pointerId); fly.pinch = fly.pointers.size === 2 ? pinchInfo() : null; walk.drag = null; };
+canvas.addEventListener('pointerup', endPointer);
+canvas.addEventListener('pointercancel', endPointer);
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  if (mode !== 'explore' || flight) return;
+  exploreInput();
+  flyDolly(-e.deltaY * (e.deltaMode === 1 ? 16 : 1) * 0.6);
+}, { passive: false });
 
 // ---------------------------------------------------------------------------
 // Guided tour
@@ -1394,51 +1492,175 @@ function showTourStep(i) {
   flyTo(s.view);
 }
 function startTour() {
-  if (walk.on) setWalk(false, { silent: true });
-  hideIntro();
+  if (mode === 'walk') leaveWalk(true);
+  hideMenu();
   tourEl.hidden = false;
   document.body.classList.add('touring');
   showTourStep(0);
+  reflectMode();
 }
 function endTour() {
+  if (tourIdx < 0) return;
   tourEl.hidden = true;
   tourIdx = -1;
   document.body.classList.remove('touring');
   hsEls.forEach((x) => x.el.classList.remove('active'));
-}
-const intro = document.getElementById('intro');
-function hideIntro() { intro.hidden = true; }
-function showMainMenu() {
-  if (walk.on) setWalk(false, { silent: true });
-  endTour(); closePanel();
-  flyTo(OVERVIEW, undefined, () => (intro.hidden = false));
+  reflectMode();
 }
 document.getElementById('tourNext').addEventListener('click', () => (tourIdx === TOUR.length - 1 ? endTour() : showTourStep(tourIdx + 1)));
 document.getElementById('tourPrev').addEventListener('click', () => showTourStep(tourIdx - 1));
 document.getElementById('tourClose').addEventListener('click', endTour);
-document.getElementById('startTour').addEventListener('click', startTour);
-document.getElementById('btnTour').addEventListener('click', startTour);
-document.getElementById('freeExplore').addEventListener('click', () => { hideIntro(); flyTo({ cam: [-30, 22, 40], target: [6, 0, -2] }); });
-document.getElementById('btnOverview').addEventListener('click', () => { if (walk.on) setWalk(false, { silent: true }); endTour(); closePanel(); flyTo(OVERVIEW); });
 
 // ---------------------------------------------------------------------------
-// Walk mode: mouse-look (pointer lock), WASD, jump, doors and interactions
+// Modes: Explore (default) and Walk, plus the main menu over the overview.
+// Switching picks a sensible spot from wherever you are right now.
 // ---------------------------------------------------------------------------
-const EYE = 1.62, RAD = 0.28, STEP = 0.42, GRAV = 22, JUMP = 7.4, HEAD = 1.8;
-const walk = {
-  on: false, active: false, paused: false, locked: false, lockFailed: false,
-  yaw: 0, pitch: 0, keys: new Set(), drag: null,
-  feet: new THREE.Vector3(), vel: new THREE.Vector3(), vy: 0, grounded: true, eyeY: 0, bob: 0, jumpQueued: false,
-  focus: null, panelAt: null,
-};
+let mode = 'explore';
+const intro = document.getElementById('intro');
 const hint = document.getElementById('controlsHint');
-const walkBtn = document.getElementById('btnWalk');
 const hud = document.getElementById('walkHud');
-const menu = document.getElementById('walkMenu');
 const promptEl = document.getElementById('prompt');
-const menuNote = document.getElementById('wmNote');
-const SPAWN = { feet: [6, 0, 27], yaw: 0 };
+const coachEl = document.getElementById('coach');
+const resumeEl = document.getElementById('resume');
+const coarse = matchMedia('(pointer: coarse)').matches;
+const HINTS = {
+  explore: coarse
+    ? 'Drag to look · Pinch or two-finger drag to move'
+    : '<kbd>Drag</kbd> look <kbd>W A S D</kbd> fly <kbd>Space</kbd>/<kbd>Shift</kbd> up/down <kbd>Scroll</kbd> glide <kbd>F</kbd> walk here',
+  walk: '<kbd>Mouse</kbd> look <kbd>W A S D</kbd> walk <kbd>Space</kbd> jump <kbd>E</kbd> use <kbd>F</kbd> fly <kbd>Esc</kbd> menu',
+};
+const COACH = {
+  explore: '<b>Explore freely</b><span><kbd>Drag</kbd> to look around</span><span><kbd>W A S D</kbd> to fly where you look</span><span><kbd>Space</kbd> / <kbd>Shift</kbd> to rise and descend</span><span><kbd>F</kbd> to land and walk</span>',
+  walk: '<b>Walk around</b><span><kbd>Mouse</kbd> to look, no clicking needed</span><span><kbd>W A S D</kbd> to walk · <kbd>Shift</kbd> to run · <kbd>Space</kbd> to jump</span><span><kbd>E</kbd> or <kbd>Click</kbd> to open doors, read and pick fruit</span><span><kbd>F</kbd> to fly · <kbd>Esc</kbd> for the main menu</span>',
+  walkDrag: '<b>Walk around</b><span><kbd>Drag</kbd> to look around</span><span><kbd>W A S D</kbd> to walk · <kbd>Shift</kbd> to run · <kbd>Space</kbd> to jump</span><span><kbd>E</kbd> to open doors, read and pick fruit</span><span><kbd>F</kbd> to fly · <kbd>Esc</kbd> for the main menu</span>',
+};
+const coached = new Set();
+let coachTimer = 0;
+function coach(kind) {
+  if (coached.has(kind)) return;
+  coached.add(kind);
+  coachEl.innerHTML = COACH[kind];
+  coachEl.hidden = false;
+  coachEl.classList.remove('out');
+  clearTimeout(coachTimer);
+  coachTimer = setTimeout(hideCoach, 7000);
+}
+function hideCoach() {
+  if (coachEl.hidden || coachEl.classList.contains('out')) return;
+  coachEl.classList.add('out');
+  setTimeout(() => (coachEl.hidden = true), 450);
+}
+function reflectMode() {
+  const shown = tourIdx >= 0 ? 'tour' : mode;
+  document.body.dataset.mode = mode;
+  document.body.classList.toggle('walking', mode === 'walk');
+  document.body.classList.toggle('menu-open', !intro.hidden);
+  document.querySelectorAll('.mode-btn[data-mode]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === shown)));
+  hint.innerHTML = mode === 'walk' && walk.lockFailed ? HINTS.walk.replace('<kbd>Mouse</kbd>', '<kbd>Drag</kbd>') : HINTS[mode];
+  hud.hidden = mode !== 'walk';
+}
+function showMenu() { intro.hidden = false; reflectMode(); }
+function hideMenu() { if (intro.hidden) return; intro.hidden = true; reflectMode(); }
+function nearOverview() { return camera.position.distanceTo(new THREE.Vector3(...OVERVIEW.cam)) < 25; }
 
+// Esc from anywhere: back to the main menu over the overview, in Explore mode.
+function goToMainMenu() {
+  if (mode === 'walk') leaveWalk(true);
+  endTour();
+  closePanel();
+  hideCoach();
+  showMenu();
+  if (!nearOverview() || flight) flyTo(OVERVIEW);
+}
+function explore() {
+  if (mode === 'walk') { leaveWalk(false); return; }
+  endTour();
+  hideMenu();
+  if (nearOverview()) flyTo({ cam: [-30, 22, 40], target: [6, 0, -2] });
+  coach('explore');
+}
+
+// Where to land when switching to Walk: the ground you're looking at (a few
+// steps short of it), or straight below you if you're already low.
+function isFree(x, z, feetY) {
+  for (const b of colliders()) {
+    if (b.max.y <= feetY + STEP || b.min.y >= feetY + HEAD) continue;
+    if (x > b.min.x - RAD && x < b.max.x + RAD && z > b.min.z - RAD && z < b.max.z + RAD) return false;
+  }
+  for (const c of posts) if (Math.hypot(x - c.x, z - c.z) < RAD + c.r) return false;
+  return true;
+}
+function landingSpot() {
+  const p = camera.position;
+  const dir = camera.getWorldDirection(new THREE.Vector3());
+  const h = Math.hypot(dir.x, dir.z) || 1;
+  let x = p.x, z = p.z;
+  if (aboveGround() > 4 && dir.y < -0.05) {
+    for (let t = 0; t < 600; t += 0.5) {
+      const qx = p.x + dir.x * t, qy = p.y + dir.y * t, qz = p.z + dir.z * t;
+      if (qy <= height(qx, qz)) { x = qx - (dir.x / h) * 5; z = qz - (dir.z / h) * 5; break; }
+    }
+  }
+  x = THREE.MathUtils.clamp(x, -80, 90);
+  z = THREE.MathUtils.clamp(z, -80, 80);
+  // Nudge outward in a spiral until there's room to stand
+  for (let r = 0; r <= 8; r += 0.5) {
+    const n = r === 0 ? 1 : Math.ceil(r * 6);
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      const cx = x + Math.cos(a) * r, cz = z + Math.sin(a) * r;
+      const y = supportAt(cx, cz, height(cx, cz) + 0.45);
+      if (isFree(cx, cz, y)) return { x: cx, y, z: cz, yaw: Math.atan2(-dir.x, -dir.z) };
+    }
+  }
+  return { x, y: height(x, z), z, yaw: Math.atan2(-dir.x, -dir.z) };
+}
+
+function enterWalk() {
+  if (mode === 'walk' || coarse) return;
+  endTour();
+  hideMenu();
+  closePanel();
+  mode = 'walk';
+  keys.clear();
+  walk.active = false;
+  walk.paused = false;
+  const spot = landingSpot();
+  walk.feet.set(spot.x, spot.y, spot.z);
+  walk.vel.set(0, 0, 0); walk.vy = 0; walk.grounded = true;
+  requestLock();
+  reflectMode();
+  const eye = [spot.x, spot.y + EYE, spot.z];
+  const ahead = [spot.x - Math.sin(spot.yaw) * 8, spot.y + EYE - 0.15, spot.z - Math.cos(spot.yaw) * 8];
+  flyTo({ cam: eye, target: ahead }, undefined, () => {
+    walk.yaw = view.yaw; walk.pitch = view.pitch;
+    walk.eyeY = eye[1];
+    walk.active = true;
+    coach(walk.lockFailed ? 'walkDrag' : 'walk');
+  });
+}
+function leaveWalk(silent) {
+  if (mode !== 'walk') return;
+  mode = 'explore';
+  walk.active = false;
+  walk.paused = false;
+  keys.clear();
+  closePanel();
+  hideResume();
+  if (document.pointerLockElement) { walk.releasing = true; document.exitPointerLock(); }
+  syncViewFromCamera();
+  reflectMode();
+  if (silent) return;
+  // Rise up and back from where you stood, still facing the same way
+  const dir = new THREE.Vector3(-Math.sin(walk.yaw), 0, -Math.cos(walk.yaw));
+  const at = camera.position.clone();
+  const target = at.clone().addScaledVector(dir, 8).setY(walk.feet.y + 1);
+  const cam = at.clone().addScaledVector(dir, -12).setY(walk.feet.y + 11);
+  flyTo({ cam: cam.toArray(), target: target.toArray() });
+  coach('explore');
+}
+
+// Pointer lock (walk mode): mouse-look without clicking
 function requestLock() {
   if (walk.lockFailed || !canvas.requestPointerLock) return;
   try {
@@ -1446,117 +1668,99 @@ function requestLock() {
     if (p && p.catch) p.catch(onLockError);
   } catch { onLockError(); }
 }
-// Browsers refuse a re-lock right after Esc; only fall back to drag-look if capture never worked.
 function onLockError() {
-  if (!walk.on) return;
-  if (walk.everLocked) { openWalkMenu(); menuNote.textContent = 'Click "Resume walking" again to pick the mouse back up.'; return; }
-  lockFailed();
-}
-function lockFailed() {
+  if (mode !== 'walk') return;
+  if (walk.everLocked) { showResume(); return; } // browsers refuse an instant re-lock; ask for a click
   walk.lockFailed = true;
-  menuNote.textContent = 'Mouse capture is not available here, so drag to look around instead.';
-  hint.textContent = 'Drag to look · W A S D to move · Space to jump · E to interact · Esc for menu';
+  reflectMode();
 }
-function setWalk(on, { silent = false } = {}) {
-  walk.on = on;
-  walk.keys.clear();
-  walk.active = false;
-  document.body.classList.toggle('walking', on);
-  walkBtn.classList.toggle('on', on);
-  hud.hidden = !on;
-  closeWalkMenu();
-  closePanel();
-  if (on) {
-    endTour(); hideIntro();
-    document.activeElement?.blur?.();
-    controls.enabled = false;
-    walk.feet.fromArray(SPAWN.feet);
-    walk.feet.y = height(walk.feet.x, walk.feet.z);
-    walk.vel.set(0, 0, 0); walk.vy = 0;
-    requestLock();
-    // Glide down to eye level, then hand over to the player
-    const eye = walk.feet.clone().setY(walk.feet.y + EYE);
-    flyTo({ cam: eye.toArray(), target: [eye.x, eye.y - 0.05, eye.z - 8] }, 1.6, () => {
-      walk.yaw = SPAWN.yaw; walk.pitch = -0.006;
-      walk.eyeY = eye.y;
-      walk.active = true;
-      toast(walk.lockFailed ? 'Drag to look around. Press Esc for the menu.' : 'Move the mouse to look around. Press Esc for the menu.');
-    });
-  } else {
-    if (document.pointerLockElement) document.exitPointerLock();
-    hint.textContent = 'Drag to orbit · Scroll to zoom · Right-drag to pan';
-    if (silent) return;
-    // Rise back out to an orbit view centred a little ahead of where you stood
-    const dir = new THREE.Vector3(-Math.sin(walk.yaw), 0, -Math.cos(walk.yaw));
-    const target = camera.position.clone().addScaledVector(dir, 10).setY(0);
-    const cam = camera.position.clone().addScaledVector(dir, -10).setY(camera.position.y + 10);
-    controls.target.copy(camera.position).addScaledVector(dir, 2);
-    flyTo({ cam: cam.toArray(), target: target.toArray() });
-  }
-}
-function openWalkMenu() {
-  if (!walk.on) return;
-  walk.paused = true;
-  walk.keys.clear();
-  closePanel();
-  menu.hidden = false;
-  document.body.classList.add('paused');
-}
-function closeWalkMenu() {
-  document.activeElement?.blur?.();
-  walk.paused = false;
-  menu.hidden = true;
-  document.body.classList.remove('paused');
-}
-walkBtn.addEventListener('click', () => setWalk(!walk.on));
-document.getElementById('wmResume').addEventListener('click', () => { closeWalkMenu(); requestLock(); });
-document.getElementById('wmOverview').addEventListener('click', () => setWalk(false));
-document.getElementById('wmMenu').addEventListener('click', showMainMenu);
-document.getElementById('hudMenu').addEventListener('click', openWalkMenu);
-
+function showResume() { if (mode === 'walk' && !walk.lockFailed) { resumeEl.hidden = false; walk.paused = true; keys.clear(); } }
+function hideResume() { resumeEl.hidden = true; if (mode === 'walk') walk.paused = false; }
+resumeEl.addEventListener('click', () => { hideResume(); requestLock(); });
 document.addEventListener('pointerlockchange', () => {
   walk.locked = document.pointerLockElement === canvas;
-  if (walk.locked) { walk.everLocked = true; menuNote.textContent = ''; closeWalkMenu(); }
-  else if (walk.on && !walk.lockFailed) openWalkMenu();
+  if (walk.locked) { walk.everLocked = true; hideResume(); return; }
+  if (walk.releasing) { walk.releasing = false; return; }
+  if (mode !== 'walk' || walk.holdLock) return;
+  // Esc releases the mouse: treat it as "back to the main menu". Losing focus (alt-tab) just pauses.
+  if (document.hasFocus()) goToMainMenu();
+  else showResume();
 });
 document.addEventListener('pointerlockerror', onLockError);
 
+// Hooks for other modules (comments): free the mouse without leaving Walk, then pick it back up.
+function releasePointer() {
+  if (mode !== 'walk') return;
+  walk.paused = true;
+  keys.clear();
+  if (document.pointerLockElement) { walk.releasing = true; document.exitPointerLock(); }
+}
+function resumeWalk() {
+  if (mode !== 'walk') return;
+  walk.paused = false;
+  requestLock();
+}
+
+// Buttons
+document.getElementById('startTour').addEventListener('click', startTour);
+document.getElementById('freeExplore').addEventListener('click', explore);
+document.getElementById('menuWalk').addEventListener('click', enterWalk);
+document.getElementById('btnTour').addEventListener('click', startTour);
+document.getElementById('btnExplore').addEventListener('click', explore);
+document.getElementById('btnWalk').addEventListener('click', enterWalk);
+document.getElementById('btnMenu').addEventListener('click', goToMainMenu);
+document.getElementById('hudMenu').addEventListener('click', goToMainMenu);
+if (coarse) { document.getElementById('btnWalk').hidden = true; document.getElementById('menuWalk').hidden = true; }
+
+// Keyboard
 addEventListener('keydown', (e) => {
-  if (e.code === 'Escape') {
-    if (walk.on) { if (menu.hidden) openWalkMenu(); else if (walk.lockFailed) closeWalkMenu(); return; }
-    if (!panel.hidden) closePanel();
-    else if (tourIdx >= 0) endTour();
-    return;
-  }
-  if (!walk.on || walk.paused) return;
+  if (typing(e)) return;
+  if (e.code === 'Escape') { goToMainMenu(); return; }
+  if (e.code === 'KeyF' && !e.repeat && !flight) { mode === 'walk' ? leaveWalk(false) : enterWalk(); return; }
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
-  if (e.code === 'Space' && !e.repeat) walk.jumpQueued = true;
-  if (e.code === 'KeyE' && !e.repeat) interact();
-  walk.keys.add(e.code);
+  if (mode === 'walk') {
+    if (walk.paused) return;
+    if (e.code === 'Space' && !e.repeat) walk.jumpQueued = true;
+    if (e.code === 'KeyE' && !e.repeat) interact();
+    hideCoachSoon();
+  } else if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'KeyE', 'KeyQ', 'ShiftLeft', 'ShiftRight'].includes(e.code)) {
+    exploreInput();
+    hideCoachSoon();
+  }
+  keys.add(e.code);
 });
-addEventListener('keyup', (e) => walk.keys.delete(e.code));
-addEventListener('blur', () => walk.keys.clear());
-canvas.addEventListener('mousedown', (e) => {
-  if (!walk.on || walk.paused) return;
+addEventListener('keyup', (e) => keys.delete(e.code));
+addEventListener('blur', () => keys.clear());
+function hideCoachSoon() { clearTimeout(coachTimer); coachTimer = setTimeout(hideCoach, 2500); }
+
+// ---------------------------------------------------------------------------
+// Walk mode: physics, collisions and interactions
+// ---------------------------------------------------------------------------
+const EYE = 1.62, RAD = 0.28, STEP = 0.42, GRAV = 22, JUMP = 7.4, HEAD = 1.8;
+const walk = {
+  active: false, paused: false, locked: false, lockFailed: false, everLocked: false, releasing: false, holdLock: false,
+  yaw: 0, pitch: 0, keys, drag: null,
+  feet: new THREE.Vector3(), vel: new THREE.Vector3(), vy: 0, grounded: true, eyeY: 0, bob: 0, jumpQueued: false,
+  focus: null, panelAt: null,
+};
+function walkPointerDown(e) {
+  if (!walk.active || walk.paused) return;
   if (walk.locked) { if (e.button === 0) interact(); return; }
-  if (!walk.lockFailed) requestLock();
-});
-canvas.addEventListener('mousemove', (e) => {
-  if (!walk.active || walk.paused || !walk.locked) return;
-  walk.yaw -= e.movementX * 0.0022;
-  walk.pitch = THREE.MathUtils.clamp(walk.pitch - e.movementY * 0.0022, -1.35, 1.35);
-});
-// Fallback look: drag (used when pointer lock isn't available)
-canvas.addEventListener('pointerdown', (e) => { if (walk.on && !walk.locked) { walk.drag = { x: e.clientX, y: e.clientY }; canvas.setPointerCapture(e.pointerId); } });
-canvas.addEventListener('pointermove', (e) => {
+  if (!walk.lockFailed) { requestLock(); return; }
+  walk.drag = { x: e.clientX, y: e.clientY };
+  capture(e);
+}
+function walkPointerMove(e) {
   if (!walk.active || walk.locked || !walk.drag) return;
   walk.yaw -= (e.clientX - walk.drag.x) * 0.004;
   walk.pitch = THREE.MathUtils.clamp(walk.pitch - (e.clientY - walk.drag.y) * 0.004, -1.35, 1.35);
   walk.drag = { x: e.clientX, y: e.clientY };
+}
+canvas.addEventListener('mousemove', (e) => {
+  if (mode !== 'walk' || !walk.active || walk.paused || !walk.locked) return;
+  walk.yaw -= e.movementX * 0.0022;
+  walk.pitch = THREE.MathUtils.clamp(walk.pitch - e.movementY * 0.0022, -1.35, 1.35);
 });
-canvas.addEventListener('pointerup', () => (walk.drag = null));
-canvas.addEventListener('pointercancel', () => (walk.drag = null));
-if (matchMedia('(pointer: coarse)').matches) walkBtn.hidden = true;
 
 // Collision helpers: boxes block the body unless they're low enough to step onto.
 function* colliders() { yield* solids; for (const d of doors) yield d.box; }
@@ -1707,6 +1911,49 @@ function toast(msg) {
 }
 
 // ---------------------------------------------------------------------------
+// Picking points in the world (used by comments)
+// ---------------------------------------------------------------------------
+const raycaster = new THREE.Raycaster();
+const _ndc = new THREE.Vector2();
+function terrainHit(ray, max = 600) {
+  for (let t = 0; t < max; t += 0.5) {
+    const q = ray.at(t, new THREE.Vector3());
+    if (q.y <= height(q.x, q.z)) return q.setY(height(q.x, q.z));
+  }
+  return null;
+}
+// World point under a screen position: buildings, trees, people or ground.
+function pickPoint(clientX, clientY, maxDist = 400) {
+  _ndc.set((clientX / innerWidth) * 2 - 1, -(clientY / innerHeight) * 2 + 1);
+  raycaster.setFromCamera(_ndc, camera);
+  raycaster.far = maxDist;
+  const roots = scene.children.filter((o) => !o.userData.noPick && !o.isLight);
+  const hit = raycaster.intersectObjects(roots, true).find((h) => h.object.visible && !h.object.userData.noPick);
+  if (hit) return hit.point.clone();
+  const q = terrainHit(raycaster.ray, maxDist);
+  return q;
+}
+// Walk mode: what the crosshair is on (or a spot just ahead of you).
+function aimPoint(maxDist = 30) {
+  const p = pickPoint(innerWidth / 2, innerHeight / 2, maxDist);
+  if (p) return p;
+  const dir = camera.getWorldDirection(new THREE.Vector3()).setY(0).normalize();
+  const q = camera.position.clone().addScaledVector(dir, 4);
+  return q.setY(height(q.x, q.z));
+}
+// Fly the camera to look at a world point (switches to Explore if needed).
+function flyToPoint(p, dist = 12) {
+  if (mode === 'walk') leaveWalk(true);
+  endTour();
+  hideMenu();
+  const from = camera.position.clone().sub(p).setY(0);
+  if (from.lengthSq() < 1) from.set(0, 0, 1);
+  from.normalize().multiplyScalar(dist);
+  const cam = p.clone().add(from).setY(Math.max(p.y + dist * 0.5, height(p.x + from.x, p.z + from.z) + 2));
+  flyTo({ cam: cam.toArray(), target: p.toArray() });
+}
+
+// ---------------------------------------------------------------------------
 // Loop
 // ---------------------------------------------------------------------------
 const clock = new THREE.Clock();
@@ -1716,7 +1963,7 @@ function updateHotspots() {
   const w = innerWidth, h = innerHeight;
   for (const { el, v } of hsEls) {
     tmp.copy(v).project(camera);
-    const visible = !walk.on && tmp.z < 1 && Math.abs(tmp.x) < 1.1 && Math.abs(tmp.y) < 1.1;
+    const visible = mode !== 'walk' && tmp.z < 1 && Math.abs(tmp.x) < 1.1 && Math.abs(tmp.y) < 1.1;
     el.classList.toggle('off', !visible);
     if (!visible) continue;
     const dist = camera.position.distanceTo(v);
@@ -1730,8 +1977,10 @@ function animate() {
   const t = clock.elapsedTime;
   updateFlight(dt);
   updateDoors(dt);
-  if (walk.on && walk.active) updateWalk(dt);
-  else if (!flight && !walk.on) { controls.update(); fovTarget = 50; }
+  if (!flight) {
+    if (mode === 'walk') { if (walk.active) updateWalk(dt); }
+    else { updateExplore(dt); fovTarget = 50; }
+  }
   if (Math.abs(camera.fov - fovTarget) > 0.01) { camera.fov = damp(camera.fov, fovTarget, 5, dt); camera.updateProjectionMatrix(); }
   animatePeople(t, dt);
   if (FLAG) FLAG.rotation.y = Math.sin(t * 1.4) * 0.12 + Math.sin(t * 3.1) * 0.04;
@@ -1749,7 +1998,20 @@ addEventListener('resize', () => {
 // Deep link: #mango opens that hotspot
 if (location.hash.length > 1) setTimeout(() => openHotspot(location.hash.slice(1), true), 400);
 
-if (location.search.includes('debug')) window.__dbg = { walk, camera, doors, interactables, setWalk, solids };
+initComments({
+  THREE, scene, camera, canvas, height,
+  getMode: () => mode, isWalkActive: () => mode === 'walk' && walk.active,
+  pickPoint, aimPoint, flyToPoint, releasePointer, resumeWalk, toast, typing,
+  // Walk mode: make a world point usable with E / click. Returns a function that removes it.
+  addInteract: (pos, label, act, r = 3) => {
+    const it = { anchor: null, local: pos.clone(), pos: pos.clone(), label, act, r };
+    interactables.push(it);
+    return () => { const i = interactables.indexOf(it); if (i >= 0) interactables.splice(i, 1); };
+  },
+});
 
+if (location.search.includes('debug')) window.__dbg = { walk, view, camera, doors, interactables, solids, enterWalk, leaveWalk, goToMainMenu, get mode() { return mode; } };
+
+reflectMode();
 animate();
 requestAnimationFrame(() => document.getElementById('loader').classList.add('done'));

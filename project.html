@@ -9,139 +9,179 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/project.css" />
 </head>
 <body class="page">
+  <a class="skip-link" href="#main">Skip to content</a>
   <header class="topbar">
     <a class="brand" href="index.html"><span class="brand-mark">◆</span> Waqf Orchard School</a>
-    <nav>
+    <nav aria-label="Site">
       <a href="index.html">Explore 3D</a>
-      <a href="project.html" class="active">The Project</a>
+      <a href="project.html" class="active" aria-current="page">The Project</a>
     </nav>
   </header>
 
-  <section class="hero">
+  <main id="main">
+    <section class="hero">
+      <div class="wrap">
+        <p class="eyebrow">Family Empowerment Through Waqf Orchards · Sierra Leone</p>
+        <h1>An orchard that feeds, teaches and earns for generations</h1>
+        <p>We are designing a school orchard and hands-on curriculum so students can grow, preserve and sell their own food, and carry that knowledge home to their families.</p>
+        <div class="actions">
+          <a class="btn" href="index.html">Explore the 3D model →</a>
+          <a class="btn ghost" href="#how">See how it works</a>
+        </div>
+      </div>
+    </section>
+
     <div class="wrap">
-      <p class="eyebrow">Family Empowerment Through Waqf Orchards · Sierra Leone</p>
-      <h1>An orchard that feeds, teaches and earns for generations</h1>
-      <p>We are designing a school orchard and hands-on curriculum so students can grow, preserve and sell their own food, and carry that knowledge home to their families.</p>
-      <div class="actions">
-        <a class="btn" href="index.html">Explore the 3D model →</a>
-        <a class="btn ghost" href="#how">See how it works</a>
+      <div class="stats">
+        <div class="stat"><b>82%</b><span>of Sierra Leone's population is food insecure</span></div>
+        <div class="stat"><b>26%</b><span>of children are stunted from malnutrition</span></div>
+        <div class="stat"><b>86.3%</b><span>of rural households are affected by poverty</span></div>
       </div>
+      <p class="source">Source: World Food Programme, as cited in the project brief.</p>
+
+      <nav class="section-nav" aria-label="On this page">
+        <div class="section-nav-inner">
+          <a href="#problem">Problem</a>
+          <a href="#solution">Solution</a>
+          <a href="#today">School today</a>
+          <a href="#why">Why</a>
+          <a href="#impact">Impact</a>
+          <a href="#how">How</a>
+          <a href="#curriculum">Curriculum</a>
+          <a href="#waqf">Waqf model</a>
+          <a href="#questions">Open questions</a>
+        </div>
+      </nav>
+
+      <section class="block" id="problem">
+        <span class="label-pill">The problem</span>
+        <h2>How might we design an orchard system that creates reliable, self-sustaining food access and income for this community?</h2>
+        <p class="lead">Agriculture is underused as a path to dignity and self-sufficiency. Families depend on outside aid that comes and goes, while fertile land around them sits idle and fruit that is grown often spoils before it can be eaten or sold.</p>
+      </section>
+
+      <section class="block" id="solution">
+        <span class="label-pill">The solution</span>
+        <h2>A curriculum and hands-on orchard at the school</h2>
+        <p class="lead">We are designing a curriculum and hands-on experience for students to learn how to sustain an orchard, built around the school now under construction.</p>
+        <div class="grid3">
+          <div class="tile"><span class="num">01</span><h3>Orchard layout</h3><p>Planned blocks for quick crops (banana, papaya), mid-term citrus and long-term mango and cashew, showing where crops are planted, irrigated and harvested.</p></div>
+          <div class="tile"><span class="num">02</span><h3>Sustainable systems</h3><p>Composting, roof rainwater and drip irrigation, and food storage: solar drying and evaporative cool stores.</p></div>
+          <div class="tile"><span class="num">03</span><h3>Income plan</h3><p>Students help grade, pack and sell surplus produce, with income returning to the school and the families who tend the trees.</p></div>
+        </div>
+      </section>
+
+      <section class="block" id="today">
+        <span class="label-pill">Where it stands</span>
+        <h2>The school today</h2>
+        <p class="lead">The Isra Ihsan Sadreddin Academy is under construction. The 3D model shows our vision of the completed school and its orchard.</p>
+        <div class="photos">
+          <figure><img src="assets/site-today-1.jpg" alt="Workers building block walls between concrete columns at the unfinished school" /><figcaption>Block walls going up between the concrete columns.</figcaption></figure>
+          <figure><img src="assets/site-today-2.jpg" alt="Interior of the unfinished school with stacked blocks and columns" /><figcaption>Classroom walls in progress. Photos: Ihsan for West Africa.</figcaption></figure>
+        </div>
+      </section>
+
+      <section class="block" id="why">
+        <span class="label-pill">Why</span>
+        <h2>Skills instead of dependence</h2>
+        <p class="lead">By teaching students how to grow, preserve and manage their own food, we can create a sustainable system that addresses food insecurity while providing valuable life skills. Rather than relying on outside aid, students gain the knowledge to support themselves, generate income, and share these practices with their families and communities, creating long-term impact beyond the school.</p>
+      </section>
+
+      <section class="block" id="impact">
+        <span class="label-pill">Impact</span>
+        <h2>What changes</h2>
+        <div class="grid3">
+          <div class="tile"><h3>Food security</h3><p>Fresh fruit at school meals and a share of every harvest for families.</p></div>
+          <div class="tile"><h3>Income</h3><p>Market sales of fresh and preserved produce fund the school and families.</p></div>
+          <div class="tile"><h3>Skills that spread</h3><p>Students carry agricultural skills home, building a sustainable system beyond the school.</p></div>
+        </div>
+      </section>
+
+      <section class="block" id="how">
+        <span class="label-pill">How</span>
+        <h2>How it comes together</h2>
+        <div class="steps-list">
+          <div class="step"><div><h3>Design the orchard layout</h3><p>Choose crops that thrive in Sierra Leone's soil and climate. Plan blocks, spacing, paths and water lines around the school. <a href="index.html#mango">See it in 3D</a></p></div></div>
+          <div class="step"><div><h3>Build the systems</h3><p>Rainwater tank and drip irrigation, a three-bay compost station, a seedling nursery, and solar drying plus cool storage. <a href="index.html#irrigation">See it in 3D</a></p></div></div>
+          <div class="step"><div><h3>Teach through the seasons</h3><p>A hands-on curriculum where students grow, maintain, harvest and preserve food, with stewardship and gratitude woven through. <a href="index.html#classroom">See it in 3D</a></p></div></div>
+          <div class="step"><div><h3>Sell the surplus</h3><p>Grade, crate and truck produce to market; students learn record-keeping and pricing. <a href="index.html#truck">See it in 3D</a></p></div></div>
+          <div class="step"><div><h3>Share within the community</h3><p>School meals, family shares and seedlings for neighbors keep food circulating locally. <a href="index.html#dining">See it in 3D</a></p></div></div>
+        </div>
+      </section>
+
+      <section class="block" id="curriculum">
+        <span class="label-pill">Curriculum</span>
+        <h2>Hands-on curriculum <span class="badge">Placeholder · team to finalize</span></h2>
+        <p class="lead">A working outline of the year. Modules, lesson plans and assessments are still being developed with stakeholders.</p>
+        <div class="grid2">
+          <div class="tile placeholder"><span class="num">Term 1</span><h3>Soil &amp; seeds</h3><ul><li>Soil testing and compost making</li><li>Raising seedlings in the nursery</li><li>[Lesson plans TBD]</li></ul></div>
+          <div class="tile placeholder"><span class="num">Term 2</span><h3>Growing</h3><ul><li>Planting, mulching and drip irrigation</li><li>Pruning, grafting and pest scouting</li><li>[Lesson plans TBD]</li></ul></div>
+          <div class="tile placeholder"><span class="num">Term 3</span><h3>Harvest &amp; preserve</h3><ul><li>Picking and grading</li><li>Solar drying, juicing and storage</li><li>[Lesson plans TBD]</li></ul></div>
+          <div class="tile placeholder"><span class="num">Term 4</span><h3>Orchard business</h3><ul><li>Record keeping and pricing</li><li>Selling at market and saving</li><li>[Lesson plans TBD]</li></ul></div>
+        </div>
+      </section>
+
+      <section class="block" id="waqf">
+        <span class="label-pill">The waqf model</span>
+        <h2>Enduring charity, not aid</h2>
+        <p class="lead">The orchards are established as waqf: endowed charitable assets. A family or school receives an established orchard that feeds them, that they can monetize, and that builds environmental stewardship and responsibility across generations.</p>
+        <div class="quote">
+          <h3>Islamic ethic</h3>
+          <p>Zakah is intended to end poverty. This project breaks a cycle of poverty as well as honoring our role as good stewards (khalifa) of the earth.</p>
+        </div>
+      </section>
+
+      <section class="block" id="questions">
+        <span class="label-pill">Open questions</span>
+        <h2>What we're still figuring out</h2>
+        <div class="grid2">
+          <div class="tile"><ul>
+            <li>How do we identify families ready to steward an orchard?</li>
+            <li>Which crops thrive best in this soil and climate?</li>
+            <li>How do we provide training and ongoing support?</li>
+            <li>How can we decrease the cost of the orchards?</li>
+          </ul></div>
+          <div class="tile"><ul>
+            <li>What knowledge are farmers and stakeholders missing?</li>
+            <li>How can technology support the farmers?</li>
+            <li>Which Stanford professors, or the Stanford farm, can help?</li>
+            <li>What does it mean to frame this as waqf rather than aid?</li>
+          </ul></div>
+        </div>
+        <p class="source stakeholders">Stakeholders: Ahmed and Dr. Bangura with Ihsan Foundation staff on the ground. Planned interviews: Br. Abdel Rahman (tree planting with orphans in Somalia, Ihsan Board), Ihsan staff, a Stanford sustainability professor working on farming in West Africa, and a permaculture specialist in West Africa.</p>
+      </section>
     </div>
-  </section>
 
-  <div class="wrap">
-    <div class="stats">
-      <div class="stat"><b>82%</b><span>of Sierra Leone's population is food insecure</span></div>
-      <div class="stat"><b>26%</b><span>of children are stunted from malnutrition</span></div>
-      <div class="stat"><b>86.3%</b><span>of rural households are affected by poverty</span></div>
-    </div>
-    <p class="source">Source: World Food Programme, as cited in the project brief.</p>
-
-    <section class="block" id="problem">
-      <span class="label-pill">The problem</span>
-      <h2>How might we design an orchard system that creates reliable, self-sustaining food access and income for this community?</h2>
-      <p class="lead">Agriculture is underused as a path to dignity and self-sufficiency. Families depend on outside aid that comes and goes, while fertile land around them sits idle and fruit that is grown often spoils before it can be eaten or sold.</p>
+    <section class="cta-band">
+      <h2>Walk through the orchard</h2>
+      <p>See what's grown, how it's preserved, and where the food goes.</p>
+      <a class="btn" href="index.html">Open the 3D model →</a>
     </section>
-
-    <section class="block" id="solution">
-      <span class="label-pill">The solution</span>
-      <h2>A curriculum and hands-on orchard at the school</h2>
-      <p class="lead">We are designing a curriculum and hands-on experience for students to learn how to sustain an orchard, built around the school now under construction.</p>
-      <div class="grid3">
-        <div class="tile"><span class="num">01</span><h3>Orchard layout</h3><p>Planned blocks for quick crops (banana, papaya), mid-term citrus and long-term mango and cashew, showing where crops are planted, irrigated and harvested.</p></div>
-        <div class="tile"><span class="num">02</span><h3>Sustainable systems</h3><p>Composting, roof rainwater and drip irrigation, and food storage: solar drying and evaporative cool stores.</p></div>
-        <div class="tile"><span class="num">03</span><h3>Income plan</h3><p>Students help grade, pack and sell surplus produce, with income returning to the school and the families who tend the trees.</p></div>
-      </div>
-    </section>
-
-    <section class="block" id="today">
-      <span class="label-pill">Where it stands</span>
-      <h2>The school today</h2>
-      <p class="lead">The Isra Ihsan Sadreddin Academy is under construction. The 3D model shows our vision of the completed school and its orchard.</p>
-      <div class="photos">
-        <figure><img src="assets/site-today-1.jpg" alt="Workers building block walls between concrete columns at the unfinished school" /><figcaption>Block walls going up between the concrete columns.</figcaption></figure>
-        <figure><img src="assets/site-today-2.jpg" alt="Interior of the unfinished school with stacked blocks and columns" /><figcaption>Classroom walls in progress. Photos: Ihsan for West Africa.</figcaption></figure>
-      </div>
-    </section>
-
-    <section class="block" id="why">
-      <span class="label-pill">Why</span>
-      <h2>Skills instead of dependence</h2>
-      <p class="lead">By teaching students how to grow, preserve and manage their own food, we can create a sustainable system that addresses food insecurity while providing valuable life skills. Rather than relying on outside aid, students gain the knowledge to support themselves, generate income, and share these practices with their families and communities, creating long-term impact beyond the school.</p>
-    </section>
-
-    <section class="block" id="impact">
-      <span class="label-pill">Impact</span>
-      <h2>What changes</h2>
-      <div class="grid3">
-        <div class="tile"><h3>Food security</h3><p>Fresh fruit at school meals and a share of every harvest for families.</p></div>
-        <div class="tile"><h3>Income</h3><p>Market sales of fresh and preserved produce fund the school and families.</p></div>
-        <div class="tile"><h3>Skills that spread</h3><p>Students carry agricultural skills home, building a sustainable system beyond the school.</p></div>
-      </div>
-    </section>
-
-    <section class="block" id="how">
-      <span class="label-pill">How</span>
-      <h2>How it comes together</h2>
-      <div class="steps-list">
-        <div class="step"><div><h3>Design the orchard layout</h3><p>Choose crops that thrive in Sierra Leone's soil and climate. Plan blocks, spacing, paths and water lines around the school. <a href="index.html#mango">See it in 3D</a></p></div></div>
-        <div class="step"><div><h3>Build the systems</h3><p>Rainwater tank and drip irrigation, a three-bay compost station, a seedling nursery, and solar drying plus cool storage. <a href="index.html#irrigation">See it in 3D</a></p></div></div>
-        <div class="step"><div><h3>Teach through the seasons</h3><p>A hands-on curriculum where students grow, maintain, harvest and preserve food, with stewardship and gratitude woven through. <a href="index.html#classroom">See it in 3D</a></p></div></div>
-        <div class="step"><div><h3>Sell the surplus</h3><p>Grade, crate and truck produce to market; students learn record-keeping and pricing. <a href="index.html#truck">See it in 3D</a></p></div></div>
-        <div class="step"><div><h3>Share within the community</h3><p>School meals, family shares and seedlings for neighbors keep food circulating locally. <a href="index.html#dining">See it in 3D</a></p></div></div>
-      </div>
-    </section>
-
-    <section class="block" id="curriculum">
-      <span class="label-pill">Curriculum</span>
-      <h2>Hands-on curriculum <span class="badge">Placeholder · team to finalize</span></h2>
-      <p class="lead">A working outline of the year. Modules, lesson plans and assessments are still being developed with stakeholders.</p>
-      <div class="grid2">
-        <div class="tile placeholder"><span class="num">Term 1</span><h3>Soil &amp; seeds</h3><ul><li>Soil testing and compost making</li><li>Raising seedlings in the nursery</li><li>[Lesson plans TBD]</li></ul></div>
-        <div class="tile placeholder"><span class="num">Term 2</span><h3>Growing</h3><ul><li>Planting, mulching and drip irrigation</li><li>Pruning, grafting and pest scouting</li><li>[Lesson plans TBD]</li></ul></div>
-        <div class="tile placeholder"><span class="num">Term 3</span><h3>Harvest &amp; preserve</h3><ul><li>Picking and grading</li><li>Solar drying, juicing and storage</li><li>[Lesson plans TBD]</li></ul></div>
-        <div class="tile placeholder"><span class="num">Term 4</span><h3>Orchard business</h3><ul><li>Record keeping and pricing</li><li>Selling at market and saving</li><li>[Lesson plans TBD]</li></ul></div>
-      </div>
-    </section>
-
-    <section class="block" id="waqf">
-      <span class="label-pill">The waqf model</span>
-      <h2>Enduring charity, not aid</h2>
-      <p class="lead">The orchards are established as waqf: endowed charitable assets. A family or school receives an established orchard that feeds them, that they can monetize, and that builds environmental stewardship and responsibility across generations.</p>
-      <div class="quote">
-        <h3>Islamic ethic</h3>
-        <p>Zakah is intended to end poverty. This project breaks a cycle of poverty as well as honoring our role as good stewards (khalifa) of the earth.</p>
-      </div>
-    </section>
-
-    <section class="block" id="questions">
-      <span class="label-pill">Open questions</span>
-      <h2>What we're still figuring out</h2>
-      <div class="grid2">
-        <div class="tile"><ul>
-          <li>How do we identify families ready to steward an orchard?</li>
-          <li>Which crops thrive best in this soil and climate?</li>
-          <li>How do we provide training and ongoing support?</li>
-          <li>How can we decrease the cost of the orchards?</li>
-        </ul></div>
-        <div class="tile"><ul>
-          <li>What knowledge are farmers and stakeholders missing?</li>
-          <li>How can technology support the farmers?</li>
-          <li>Which Stanford professors, or the Stanford farm, can help?</li>
-          <li>What does it mean to frame this as waqf rather than aid?</li>
-        </ul></div>
-      </div>
-      <p class="source" style="margin-top:16px">Stakeholders: Ahmed and Dr. Bangura with Ihsan Foundation staff on the ground. Planned interviews: Br. Abdel Rahman (tree planting with orphans in Somalia, Ihsan Board), Ihsan staff, a Stanford sustainability professor working on farming in West Africa, and a permaculture specialist in West Africa.</p>
-    </section>
-  </div>
-
-  <section class="cta-band">
-    <h2>Walk through the orchard</h2>
-    <p>See what's grown, how it's preserved, and where the food goes.</p>
-    <a class="btn" href="index.html">Open the 3D model →</a>
-  </section>
+  </main>
   <footer>DYML class prototype · Concept visualization, not a final design.</footer>
+  <script>
+    // Mark the section-nav link for the section currently in view.
+    (function () {
+      var links = document.querySelectorAll('.section-nav a[href^="#"]');
+      if (!('IntersectionObserver' in window) || !links.length) return;
+      var byId = {};
+      links.forEach(function (a) { byId[a.getAttribute('href').slice(1)] = a; });
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (en) {
+          if (!en.isIntersecting) return;
+          links.forEach(function (a) { a.removeAttribute('aria-current'); });
+          var a = byId[en.target.id];
+          if (a) {
+            a.setAttribute('aria-current', 'location');
+            var nav = a.parentNode;
+            if (nav.scrollWidth > nav.clientWidth) nav.scrollTo({ left: a.offsetLeft - 16, behavior: 'smooth' });
+          }
+        });
+      }, { rootMargin: '-35% 0px -60% 0px' });
+      Object.keys(byId).forEach(function (id) { var s = document.getElementById(id); if (s) io.observe(s); });
+    })();
+  </script>
 </body>
 </html>

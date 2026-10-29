@@ -9,6 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/comments.css" />
   <script type="importmap">
     {
       "imports": {
@@ -30,15 +31,27 @@
     </nav>
   </header>
 
-  <section id="intro" class="card intro">
+  <section id="intro" class="card intro" aria-label="Main menu">
     <p class="eyebrow">Sierra Leone · DYML prototype</p>
     <h1>A school that grows its own future</h1>
-    <p>Explore a 3D model of a school orchard designed to give students food, skills and income, and to keep giving for generations.</p>
-    <div class="actions">
-      <button class="btn primary" id="startTour">▶ Take the 2-minute tour</button>
-      <button class="btn" id="freeExplore">Explore freely</button>
+    <p class="lede">A 3D model of a school orchard designed to give students food, skills and income, and to keep giving for generations.</p>
+    <p class="menu-label">Choose how to look around</p>
+    <div class="mode-cards">
+      <button class="mode-card" id="startTour" type="button">
+        <span class="mode-icon" aria-hidden="true">▶</span>
+        <span class="mode-text"><b>Guided tour</b><small>The story in six stops · about 2 minutes</small></span>
+      </button>
+      <button class="mode-card is-default" id="freeExplore" type="button">
+        <span class="mode-icon" aria-hidden="true">✦</span>
+        <span class="mode-text"><b>Explore freely</b><small>Fly anywhere · drag to look, W A S D to move</small></span>
+        <span class="mode-tag">Default</span>
+      </button>
+      <button class="mode-card" id="menuWalk" type="button">
+        <span class="mode-icon" aria-hidden="true">🚶</span>
+        <span class="mode-text"><b>Walk around</b><small>First person · go inside, open doors, pick fruit</small></span>
+      </button>
     </div>
-    <p class="hint">Click the glowing dots to see what is grown, how it is preserved, and more.</p>
+    <p class="hint">Or click a numbered dot to learn about that part of the school. <a href="project.html">Read about the project →</a></p>
   </section>
 
   <aside id="panel" class="card panel" aria-live="polite" hidden>
@@ -66,38 +79,23 @@
 
   <div id="walkHud" class="walk-hud" hidden>
     <div class="crosshair"></div>
-    <button class="hud-chip hud-esc" id="hudMenu" type="button"><kbd>Esc</kbd> Menu</button>
+    <button class="hud-chip hud-esc" id="hudMenu" type="button"><kbd>Esc</kbd> Main menu</button>
     <div class="hud-chip hud-basket" id="basket" hidden></div>
     <div class="prompt" id="prompt" hidden><kbd>E</kbd><span></span></div>
-    <div class="toast" id="toast" hidden></div>
   </div>
+  <div class="toast" id="toast" hidden></div>
+  <div class="coach card" id="coach" hidden></div>
+  <button class="resume card" id="resume" type="button" hidden><b>Paused</b><span>Click to keep walking</span></button>
 
-  <section id="walkMenu" class="card walk-menu" hidden>
-    <p class="eyebrow">Walk mode · Paused</p>
-    <h2>Walk the orchard school</h2>
-    <ul class="keys">
-      <li><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span> Move</li>
-      <li><span><kbd>Mouse</kbd></span> Look around</li>
-      <li><span><kbd>Space</kbd></span> Jump</li>
-      <li><span><kbd>Shift</kbd></span> Run</li>
-      <li><span><kbd>E</kbd> / <kbd>Click</kbd></span> Open doors, read, pick fruit</li>
-      <li><span><kbd>Esc</kbd></span> This menu</li>
-    </ul>
-    <p class="hint">Try the classrooms, the library and the cool store. Pick fruit in the orchard, then load it onto the truck or share it at lunch.</p>
-    <div class="actions">
-      <button class="btn primary" id="wmResume">▶ Resume walking</button>
-      <button class="btn" id="wmOverview">Back to overview</button>
-      <button class="btn" id="wmMenu">Main menu</button>
+  <nav class="modebar" aria-label="View mode">
+    <button class="mode-btn menu-btn" id="btnMenu" type="button" title="Main menu (Esc)">☰ Menu</button>
+    <div class="seg" role="group" aria-label="Mode">
+      <button class="mode-btn" data-mode="tour" id="btnTour" type="button" aria-pressed="false">▶ Tour</button>
+      <button class="mode-btn" data-mode="explore" id="btnExplore" type="button" aria-pressed="true">✦ Explore</button>
+      <button class="mode-btn" data-mode="walk" id="btnWalk" type="button" aria-pressed="false">🚶 Walk</button>
     </div>
-    <p class="hint note" id="wmNote"></p>
-  </section>
-
-  <div class="toolbar">
-    <button class="tool" id="btnTour" title="Guided tour">▶ Tour</button>
-    <button class="tool" id="btnWalk" title="Walk around at eye level">🚶 Walk</button>
-    <button class="tool" id="btnOverview" title="Reset view">⌂ Overview</button>
-  </div>
-  <p class="controls-hint" id="controlsHint">Drag to orbit · Scroll to zoom · Right-drag to pan</p>
+  </nav>
+  <p class="controls-hint" id="controlsHint"></p>
 
   <div id="loader"><div class="spinner"></div><p>Planting the orchard…</p></div>
 
