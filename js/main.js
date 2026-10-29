@@ -18,7 +18,7 @@ renderer.toneMappingExposure = 0.85;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0xc9d6c6, 110, 380);
+scene.fog = new THREE.Fog(0xccd6c4, 110, 380);
 
 const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 2000);
 const OVERVIEW = { cam: [-62, 42, 72], target: [6, 0, 0] };
@@ -45,8 +45,8 @@ envScene.add(sky);
 scene.environment = pmrem.fromScene(envScene).texture;
 scene.add(sky);
 
-scene.add(new THREE.HemisphereLight(0xe4f0ff, 0x6a5534, 0.35));
-const sunLight = new THREE.DirectionalLight(0xffefd2, 2.8);
+scene.add(new THREE.HemisphereLight(0xe1ecf5, 0x7a5f3c, 0.42));
+const sunLight = new THREE.DirectionalLight(0xffe9cc, 2.85);
 sunLight.position.copy(sun).multiplyScalar(150);
 sunLight.castShadow = true;
 sunLight.shadow.mapSize.set(2048, 2048);
@@ -202,6 +202,28 @@ const M = {
   chalk: null,
   sign: null,
 };
+// Material polish: corrugated sheet reads as painted metal (less glare), the
+// sky's image light is eased off a touch so the warm sun does the modelling.
+Object.assign(M.roof, { roughness: 0.72, metalness: 0.08, color: new THREE.Color(0xf4e6dc) });
+Object.assign(M.white, { color: new THREE.Color(0xf1ece0) });
+Object.assign(M.steel, { roughness: 0.5, metalness: 0.6 });
+for (const m of Object.values(M)) if (m && m.isMaterial) m.envMapIntensity = 0.8;
+M.grass.vertexColors = true;
+M.terracotta = new THREE.MeshStandardMaterial({ color: 0xa9603b, roughness: 0.92, envMapIntensity: 0.8 });
+M.gutter = new THREE.MeshStandardMaterial({ color: 0xd8d4c8, roughness: 0.55, metalness: 0.3, envMapIntensity: 0.8 });
+// Woven palm mat: striped weave with a darker bound edge, on a thin slab.
+TEX.mat = canvasTex(128, (g, s) => {
+  g.fillStyle = '#8a6a40'; g.fillRect(0, 0, s, s);
+  for (let y = 0; y < s; y += 8) { g.fillStyle = (y / 8) % 2 ? 'rgba(60,40,20,0.22)' : 'rgba(230,200,140,0.16)'; g.fillRect(0, y, s, 4); }
+  for (let x = 0; x < s; x += 6) { g.fillStyle = 'rgba(40,25,10,0.10)'; g.fillRect(x, 0, 2, s); }
+  g.strokeStyle = '#5a4026'; g.lineWidth = 10; g.strokeRect(5, 5, s - 10, s - 10);
+});
+TEX.mat.wrapS = TEX.mat.wrapT = THREE.ClampToEdgeWrapping;
+M.mat = new THREE.MeshStandardMaterial({ map: TEX.mat, roughness: 1, envMapIntensity: 0.8 });
+
+// Decoration RNG, kept separate so the seeded layout of the scene never shifts.
+let dseed = 7;
+const drand = () => (dseed = (dseed * 16807) % 2147483647) / 2147483647;
 
 // Terrain height: flat around the site, rolling hills beyond.
 function height(x, z) {
@@ -225,10 +247,19 @@ function inst(geo, mat, p, r = [0, 0, 0], s = [1, 1, 1], shadow = true) {
   batches.get(key).list.push(mx);
   if (geo === G.box) solids.push(new THREE.Box3(new THREE.Vector3(-0.5, -0.5, -0.5), new THREE.Vector3(0.5, 0.5, 0.5)).applyMatrix4(mx));
 }
+// Organic materials get a gentle per-instance tone shift so repeats don't read as clones.
+const JITTER = new Set();
+const _jc = new THREE.Color();
 function flushBatches() {
   for (const { geo, mat, shadow, list } of batches.values()) {
     const m = new THREE.InstancedMesh(geo, mat, list.length);
     list.forEach((mx, i) => m.setMatrixAt(i, mx));
+    if (JITTER.has(mat)) {
+      for (let i = 0; i < list.length; i++) {
+        const v = 0.88 + drand() * 0.18, w = (drand() - 0.5) * 0.08;
+        m.setColorAt(i, _jc.setRGB(v * (1 + w), v, v * (1 - w)));
+      }
+    }
     m.castShadow = shadow;
     m.receiveShadow = true;
     scene.add(m);
@@ -279,6 +310,68 @@ function patch(w, d, x, z, mat, { scale = 6, rot = 0, lift = 0.03 } = {}) {
   return m;
 }
 
+// Soft contact shadows: feathered discs and rectangles merged into one
+// transparent mesh (one draw call, no per-frame cost). They ground trees,
+// buildings, furniture and people the way ambient occlusion would.
+const AO = { pos: [], col: [], idx: [] };
+function aoVert(x, z, a, y, lift) {
+  AO.pos.push(x, y ?? height(x, z) + lift, z);
+  AO.col.push(1, 1, 1, Math.min(1, a * 1.4));
+  return AO.pos.length / 3 - 1;
+}
+const AO_RINGS = [[0, 1], [0.38, 0.72], [0.7, 0.32], [1, 0]];
+// Disc of radius r (sx/sz stretch it into an ellipse).
+function aoDisc(x, z, r, s = 0.5, { y, sz = 1, lift = 0.06 } = {}) {
+  const N = 14, c = aoVert(x, z, s, y, lift);
+  let prev = null;
+  for (let k = 1; k < AO_RINGS.length; k++) {
+    const [f, a] = AO_RINGS[k], ring = [];
+    for (let i = 0; i < N; i++) {
+      const t = (i / N) * Math.PI * 2;
+      ring.push(aoVert(x + Math.cos(t) * r * f, z + Math.sin(t) * r * f * sz, s * a, y, lift));
+    }
+    for (let i = 0; i < N; i++) {
+      const j = (i + 1) % N;
+      if (!prev) AO.idx.push(c, ring[j], ring[i]);
+      else AO.idx.push(prev[i], prev[j], ring[j], prev[i], ring[j], ring[i]);
+    }
+    prev = ring;
+  }
+}
+// Rectangle (half sizes hw/hd, turned by yaw) with a feathered skirt of width `spread`.
+function aoRect(x, z, hw, hd, yaw = 0, spread = 1, s = 0.5, { y, lift = 0.06 } = {}) {
+  const cs = Math.cos(yaw), sn = Math.sin(yaw);
+  const rings = [[-Math.min(hw, hd, spread * 0.4), 1], [0, 0.82], [spread * 0.3, 0.5], [spread * 0.62, 0.2], [spread, 0]];
+  let prev = null;
+  for (const [o, a] of rings) {
+    const ring = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([u, v]) => {
+      const lx = u * (hw + o), lz = v * (hd + o);
+      return aoVert(x + lx * cs + lz * sn, z - lx * sn + lz * cs, s * a, y, lift);
+    });
+    if (!prev) AO.idx.push(ring[0], ring[2], ring[1], ring[0], ring[3], ring[2]);
+    else for (let i = 0; i < 4; i++) { const j = (i + 1) % 4; AO.idx.push(prev[i], prev[j], ring[j], prev[i], ring[j], ring[i]); }
+    prev = ring;
+  }
+}
+function buildContactShadows() {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(AO.pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(AO.col, 4));
+  g.setIndex(AO.idx);
+  g.computeBoundingSphere();
+  const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({
+    color: 0x2a2114, vertexColors: true, transparent: true, depthWrite: false,
+    polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6, side: THREE.DoubleSide,
+  }));
+  m.renderOrder = 1;
+  m.userData.noPick = true;
+  m.raycast = () => {};
+  scene.add(m);
+}
+// World-space helpers for decorating a (possibly rotated) group before it is furnished.
+const yawOf = (grp) => new THREE.Euler().setFromQuaternion(grp.getWorldQuaternion(new THREE.Quaternion()), 'YXZ').y;
+const atWorld = (grp, x, y, z) => grp.localToWorld(new THREE.Vector3(x, y, z));
+
 // Organic foliage blob (smooth, slightly lumpy sphere).
 function blobGeo(variant) {
   let g = new THREE.IcosahedronGeometry(1, 3);
@@ -308,8 +401,36 @@ const G = {
   frond: (() => { const g = new THREE.PlaneGeometry(1.4, 5, 1, 6); g.translate(0, 2.5, 0); const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const y = p.getY(i); p.setZ(i, -0.06 * y * y); } g.computeVertexNormals(); return g; })(),
   bLeaf: (() => { const g = new THREE.PlaneGeometry(0.9, 2.6, 1, 5); g.translate(0, 1.3, 0); const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const y = p.getY(i); p.setZ(i, -0.12 * y * y); } g.computeVertexNormals(); return g; })(),
   grass: (() => { const g = new THREE.ConeGeometry(0.07, 0.55, 3); g.translate(0, 0.27, 0); return g; })(),
+  flat: new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2),
+  slab: new THREE.BoxGeometry(1, 1, 1), // decorative box: not G.box, so inst() adds no collider
+  potT: (() => { const g = new THREE.CylinderGeometry(1, 0.72, 1, 12); g.translate(0, 0.5, 0); return g; })(),
 };
+// Instanced prop placed in a group's local frame (the group must have its world matrix updated).
+const instAt = (grp, geo, mat, p, r = [0, 0, 0], s = 1, shadow = true) => inst(geo, mat, atWorld(grp, ...p).toArray(), [r[0], r[1] + yawOf(grp), r[2]], s, shadow);
+// One-sided feathered strip along a wall base: from (x0,z0)-(x1,z1), fading toward normal (nx,nz). World space.
+function aoEdge(x0, z0, x1, z1, nx, nz, spread, s, y) {
+  let prev = null;
+  for (const [f, a] of [[0, 1], [0.3, 0.5], [0.62, 0.2], [1, 0]]) {
+    const row = [aoVert(x0 + nx * spread * f, z0 + nz * spread * f, s * a, y), aoVert(x1 + nx * spread * f, z1 + nz * spread * f, s * a, y)];
+    if (prev) AO.idx.push(prev[0], prev[1], row[1], prev[0], row[1], row[0]);
+    prev = row;
+  }
+}
+// Same, but in a group's local frame.
+function aoEdgeIn(grp, x0, z0, x1, z1, nx, nz, spread, s, y) {
+  const a = atWorld(grp, x0, y, z0), b = atWorld(grp, x1, y, z1), ry = yawOf(grp);
+  const wx = nx * Math.cos(ry) + nz * Math.sin(ry), wz = -nx * Math.sin(ry) + nz * Math.cos(ry);
+  aoEdge(a.x, a.z, b.x, b.z, wx, wz, spread, s, a.y);
+}
+// Split the span [a0,a1] around openings [[g0,g1],...] (sorted or not) into solid runs.
+function runs(a0, a1, gaps) {
+  const out = []; let s = a0;
+  for (const [g0, g1] of [...gaps].sort((p, q) => p[0] - q[0])) { if (g0 > s) out.push([s, Math.min(g0, a1)]); s = Math.max(s, g1); }
+  if (s < a1) out.push([s, a1]);
+  return out.filter(([p, q]) => q - p > 0.05);
+}
 const leafMats = [M.leafA, M.leafB, M.leafC, M.leafD];
+for (const m of [...leafMats, M.trunk, M.palmTrunk, M.frond, M.bananaLeaf, M.mango, M.orange, M.greenFruit, M.crate, M.crateGreen, M.mulch, M.basket, M.terracotta]) JITTER.add(m);
 
 // ---------------------------------------------------------------------------
 // Ground, paths, road
@@ -319,6 +440,20 @@ const leafMats = [M.leafA, M.leafB, M.leafC, M.leafD];
   scaleUV(g, 90, 90);
   g.rotateX(-Math.PI / 2);
   drape(g, 0);
+  // Vertex tint: broad lighter/darker swathes, and dry, trodden grass that
+  // fades in around the laterite paths so their edges sit into the ground.
+  const PATHS = [[600, 7, 0, 31], [36, 10, -3, 3.5], [4, 22, 6, 18], [4, 12, 30, 23], [12, 3.5, 13, 8], [3, 14, -20, 13], [16, 3, -27, 20], [3.5, 22, -16, -11], [30, 46, 30, -5]];
+  const gp = g.attributes.position, gc = new Float32Array(gp.count * 3);
+  for (let i = 0; i < gp.count; i++) {
+    const x = gp.getX(i), z = gp.getZ(i);
+    let d = 1e9;
+    for (const [w, dd, cx, cz] of PATHS) d = Math.min(d, Math.max(Math.abs(x - cx) - w / 2, Math.abs(z - cz) - dd / 2));
+    const worn = 1 - THREE.MathUtils.smoothstep(d, 0, 4.5);
+    const n = Math.sin(x * 0.045 + 1.3) * Math.cos(z * 0.052 - 0.4) + 0.5 * Math.sin((x - z) * 0.11 + 2.1);
+    const v = 0.97 + n * 0.05, dry = THREE.MathUtils.clamp(0.5 + 0.5 * Math.sin(x * 0.021 - z * 0.033 + 0.7), 0, 1) * 0.06 + worn * 0.16;
+    gc[i * 3] = v * (1 + dry * 0.9); gc[i * 3 + 1] = v * (1 - dry * 0.08); gc[i * 3 + 2] = v * (1 - dry * 1.1);
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(gc, 3));
   const ground = new THREE.Mesh(g, M.grass);
   ground.receiveShadow = true;
   scene.add(ground);
@@ -355,8 +490,10 @@ function hipRoofGeo(w, d, h) {
 // Walls are built from segments around door and window openings so every
 // building is hollow and walkable. The lower metre gets the green dado band.
 const WALL_T = 0.22, DADO = 1.0;
-M.floor = new THREE.MeshStandardMaterial({ map: TEX.concrete, color: 0xd8c9a8, roughness: 0.9 });
-M.ceiling = new THREE.MeshStandardMaterial({ color: 0xf3ecdc, roughness: 0.95 });
+// Interiors take less sky light than the outside (there is a roof overhead),
+// so the warm lamps and the window light read.
+M.floor = new THREE.MeshStandardMaterial({ map: TEX.concrete, color: 0xdacbac, roughness: 0.9, envMapIntensity: 0.55 });
+M.ceiling = new THREE.MeshStandardMaterial({ color: 0xf4ead6, roughness: 0.95, envMapIntensity: 0.5 });
 M.door = new THREE.MeshStandardMaterial({ map: TEX.shutter, roughness: 0.7 });
 M.lamp = new THREE.MeshStandardMaterial({ color: 0xfff4d6, emissive: 0xffe2a8, emissiveIntensity: 1.6 });
 function wall(grp, axis, a0, a1, at, y0, h, openings = []) {
@@ -467,17 +604,67 @@ function schoolBlock(w, d, { x, z, rotY = 0, doors: doorIdx = [], h = 3.4, parti
   grp.rotation.y = rotY;
   scene.add(grp);
   grp.updateMatrixWorld(true);
+
+  // Rainwater gutters on both eaves; downpipes drop at the back corners.
+  const eaveY = P + h + 0.24, zf = ver / 2 + 0.2 + rd / 2 + 0.09, zb = ver / 2 + 0.2 - rd / 2 - 0.09;
+  for (const gz of [zf, zb]) instAt(grp, G.cylLow, M.gutter, [0, eaveY, gz], [0, 0, Math.PI / 2], [0.075, rw, 0.075]);
+  for (const sx of [-1, 1]) {
+    const px = sx * (w / 2 + WALL_T / 2 + 0.12), pz = -d / 2 - WALL_T / 2 - 0.12;
+    instAt(grp, G.cylLow, M.gutter, [px, (P + eaveY) / 2, pz], [0, 0, 0], [0.05, eaveY - P, 0.05]);
+    instAt(grp, G.cylLow, M.gutter, [px, eaveY, (pz + zb) / 2], [Math.PI / 2, 0, 0], [0.05, Math.abs(zb - pz) + 0.05, 0.05]);
+    instAt(grp, G.cylLow, M.gutter, [px, P + 0.12, pz - 0.08], [Math.PI / 2.6, 0, 0], [0.05, 0.25, 0.05]);
+  }
+  // Woven mat outside each door
+  for (const o of front) if (o.b === 0) instAt(grp, G.slab, M.mat, [o.c, P + 0.012, d / 2 + WALL_T / 2 + 0.5], [0, 0, 0], [1.0, 0.018, 0.6], false);
+
+  // Contact shadows: around the plinth, along the veranda wall, column feet,
+  // and soft occlusion along every interior wall base.
+  const pc = atWorld(grp, 0, 0, ver / 2);
+  aoRect(pc.x, pc.z, (w + 1) / 2, (d + ver + 0.6) / 2, rotY, 2.0, 0.55);
+  const doorGaps = front.filter((o) => o.b === 0).map((o) => [o.c - o.w / 2 - 0.1, o.c + o.w / 2 + 0.1]);
+  for (const [a0, a1] of runs(-w / 2, w / 2, doorGaps)) aoEdgeIn(grp, a0, d / 2 + WALL_T / 2, a1, d / 2 + WALL_T / 2, 0, 1, 0.8, 0.32, P + 0.015);
+  for (let i = 0; i <= cols; i++) { const c = atWorld(grp, -w / 2 + (i * w) / cols, P + 0.015, cz); aoDisc(c.x, c.z, 0.6, 0.3, { y: c.y }); }
+  const fy = P + 0.03, iz = d / 2 - WALL_T / 2, ix = w / 2 - WALL_T / 2;
+  aoEdgeIn(grp, -ix, -iz, ix, -iz, 0, 1, 1.1, 0.46, fy);
+  for (const [a0, a1] of runs(-ix, ix, doorGaps)) aoEdgeIn(grp, a0, iz, a1, iz, 0, -1, 1.1, 0.46, fy);
+  aoEdgeIn(grp, -ix, -iz, -ix, iz, 1, 0, 1.1, 0.46, fy);
+  aoEdgeIn(grp, ix, -iz, ix, iz, -1, 0, 1.1, 0.46, fy);
+  const pGap = [[d / 2 - 1.3 - 0.55 - 0.1, d / 2 - 1.3 + 0.55 + 0.1]];
+  for (const px of partitions) for (const sx of [-1, 1]) for (const [a0, a1] of runs(-iz, iz, pGap)) aoEdgeIn(grp, px + sx * WALL_T / 2, a0, px + sx * WALL_T / 2, a1, sx, 0, 1.1, 0.46, fy);
   return { grp, P, h, w, d, bay, doors: doorList };
 }
 
 const MAIN = schoolBlock(26, 9, { x: 0, z: -9, doors: [2, 5], partitions: [0], names: ['Orchard Science classroom', 'Harvest & Preserve lab'] });
 const ADMIN = schoolBlock(13, 8, { x: -27, z: 2, rotY: Math.PI / 2, doors: [1], names: ['Library & records office'] });
 
+// Veranda life: a bench under a window and potted plants flanking the doors,
+// kept against the wall so the veranda, door swings and column gaps stay clear.
+function pottedPlant(grp, x, y, z, s = 1) {
+  instAt(grp, G.potT, M.terracotta, [x, y, z], [0, 0, 0], [0.2 * s, 0.4 * s, 0.2 * s]);
+  instAt(grp, G.cylLow, M.soil, [x, y + 0.39 * s, z], [0, 0, 0], [0.17 * s, 0.02, 0.17 * s], false);
+  instAt(grp, G.blobs[Math.floor(drand() * 4)], drand() < 0.5 ? M.leafB : M.leafC, [x, y + 0.66 * s, z], [0, drand() * 6, 0], [0.32 * s, 0.38 * s, 0.32 * s]);
+  const c = atWorld(grp, x, y, z);
+  solids.push(new THREE.Box3(new THREE.Vector3(c.x - 0.17 * s, y, c.z - 0.17 * s), new THREE.Vector3(c.x + 0.17 * s, y + 0.9 * s, c.z + 0.17 * s)));
+  aoDisc(c.x, c.z, 0.45 * s, 0.4, { y: y + 0.016 });
+}
+for (const [B, benchBays] of [[MAIN, [1, 6]], [ADMIN, [2]]]) {
+  const { grp, P, d, bay, doors: dl } = B;
+  const wz = d / 2 + WALL_T / 2;
+  for (const i of benchBays) {
+    // Same shape as bench(), but batched (and the boxes still collide via inst()).
+    const bx = bay(i), bz = wz + 0.24, bw = 1.5;
+    aoFurniture(grp, bx, P, bz, Math.PI / 2, 0.17, bw / 2, 0.32, 0.3, 0.02);
+    instAt(grp, G.box, M.wood, [bx, P + 0.44, bz], [0, 0, 0], [bw, 0.05, 0.34]);
+    for (const s of [-1, 1]) instAt(grp, G.box, M.darkWood, [bx + s * (bw / 2 - 0.06), P + 0.21, bz], [0, 0, 0], [0.05, 0.42, 0.3]);
+  }
+  for (const door of dl) for (const sx of [-1, 1]) pottedPlant(grp, door.local.x + sx * 1.15, P, wz + 0.32, 0.9);
+}
+
 // Interior ceiling lamps (the light switches toggle these)
 const lamps = [];
 function lamp(grp, x, y, z, intensity = 22) {
   const fixture = mesh(box(1.1, 0.05, 0.14), M.lamp, [x, y, z], grp, { cast: false, solid: false });
-  const light = new THREE.PointLight(0xffe2b0, intensity, 13, 1.6);
+  const light = new THREE.PointLight(0xffdcaa, intensity, 13, 1.6);
   light.position.set(x, y - 0.3, z);
   grp.add(light);
   const l = { light, fixture, on: true, intensity };
@@ -530,6 +717,8 @@ let SIGN;
 // ---------------------------------------------------------------------------
 // Vegetation
 // ---------------------------------------------------------------------------
+// Ground shadow under plants near the site (far away it is lost in the haze anyway).
+const aoPlant = (x, z, r, s) => { if (Math.hypot(x - 5, z) < 105) aoDisc(x, z, r, s, { lift: Math.hypot(x - 5, z) > 78 ? 0.12 : 0.06 }); };
 function fruitOn(cx, cy, cz, r, mat, n, size = 0.13) {
   for (let i = 0; i < n; i++) {
     const a = rand() * Math.PI * 2, el = rr(-0.9, 0.2);
@@ -539,6 +728,7 @@ function fruitOn(cx, cy, cz, r, mat, n, size = 0.13) {
 function mangoTree(x, z, s = 1, fruit = true, mat = M.mango) {
   const y0 = height(x, z);
   posts.push({ x, z, r: 0.26 * s });
+  aoPlant(x, z, 2.7 * s, 0.4);
   inst(G.trunk, M.trunk, [x, y0, z], [rr(-0.05, 0.05), rand() * 6, rr(-0.05, 0.05)], [0.24 * s, 2.0 * s, 0.24 * s]);
   const lm = pick(leafMats.slice(0, 3));
   const cy = y0 + 2.9 * s;
@@ -553,6 +743,7 @@ function mangoTree(x, z, s = 1, fruit = true, mat = M.mango) {
 function citrusTree(x, z, s = 1) {
   const y0 = height(x, z);
   posts.push({ x, z, r: 0.16 * s });
+  aoPlant(x, z, 1.8 * s, 0.38);
   inst(G.trunk, M.trunk, [x, y0, z], [0, rand() * 6, 0], [0.13 * s, 0.9 * s, 0.13 * s]);
   const cy = y0 + 1.9 * s;
   inst(pick(G.blobs), pick([M.leafA, M.leafB]), [x, cy, z], [0, rand() * 6, 0], [1.35 * s, 1.25 * s, 1.35 * s]);
@@ -562,6 +753,7 @@ function citrusTree(x, z, s = 1) {
 function bananaPlant(x, z, s = 1) {
   const y0 = height(x, z);
   posts.push({ x, z, r: 0.15 * s });
+  aoPlant(x, z, 1.2 * s, 0.3);
   inst(G.cylLow, M.leafD, [x, y0 + 1.2 * s, z], [0, 0, 0], [0.13 * s, 2.4 * s, 0.13 * s]);
   const n = 7;
   for (let i = 0; i < n; i++) {
@@ -572,6 +764,7 @@ function bananaPlant(x, z, s = 1) {
 function papaya(x, z, s = 1) {
   const y0 = height(x, z);
   posts.push({ x, z, r: 0.11 * s });
+  aoPlant(x, z, 0.9 * s, 0.3);
   inst(G.cylLow, M.palmTrunk, [x, y0 + 1.6 * s, z], [0, 0, 0], [0.09 * s, 3.2 * s, 0.09 * s]);
   for (let i = 0; i < 8; i++) inst(G.bLeaf, M.bananaLeaf, [x, y0 + 3.2 * s, z], [rr(0.8, 1.3), (i / 8) * Math.PI * 2, 0], [0.7 * s, 0.55 * s, 0.7 * s]);
   for (let i = 0; i < 5; i++) {
@@ -584,11 +777,13 @@ function palm(x, z, s = 1) {
   const hgt = rr(7, 10) * s, lean = rr(-0.12, 0.12), dir = rand() * 6;
   const tx = x + Math.sin(dir) * Math.sin(lean) * hgt, tz = z + Math.cos(dir) * Math.sin(lean) * hgt;
   posts.push({ x, z, r: 0.22 * s });
+  aoPlant(x, z, 1.1 * s, 0.3);
   inst(G.trunk, M.palmTrunk, [x, y0, z], [lean, dir, 0], [0.22 * s, hgt, 0.22 * s]);
   const n = 13;
   for (let i = 0; i < n; i++) inst(G.frond, M.frond, [tx, y0 + hgt, tz], [rr(0.9, 1.7), (i / n) * Math.PI * 2 + rr(0, 0.3), 0], [s, s, s]);
 }
 function bush(x, z, s = 1) {
+  aoPlant(x, z, 1.75 * s, 0.42);
   inst(pick(G.blobs), pick(leafMats), [x, height(x, z) + 0.5 * s, z], [0, rand() * 6, 0], [1.4 * s, 0.9 * s, 1.4 * s]);
 }
 
@@ -965,7 +1160,13 @@ M.sack = new THREE.MeshStandardMaterial({ color: 0xc8b38a, roughness: 1 });
 M.seed = new THREE.MeshStandardMaterial({ color: 0x6b4a2a, roughness: 1 });
 M.tray = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.9 });
 
+// Furniture contact shadow, in the parent group's frame (lift: floor surface above y).
+function aoFurniture(grp, x, y, z, rot, hw, hd, spread, s, lift = 0.03) {
+  const c = atWorld(grp, x, y, z);
+  aoRect(c.x, c.z, hw, hd, yawOf(grp) + rot, spread, s, { y: c.y + lift });
+}
 function desk(grp, x, y, z, rot = 0, w = 1.3, d = 0.55) {
+  aoFurniture(grp, x, y, z, rot, d / 2, w / 2, 0.45, 0.36);
   const g = new THREE.Group();
   mesh(box(d, 0.05, w), M.wood, [0, 0.74, 0], g);
   for (const s of [-1, 1]) mesh(box(d - 0.05, 0.72, 0.05), M.darkWood, [0, 0.36, s * (w / 2 - 0.05)], g);
@@ -974,7 +1175,8 @@ function desk(grp, x, y, z, rot = 0, w = 1.3, d = 0.55) {
   grp.add(g);
   return g;
 }
-function bench(grp, x, y, z, rot = 0, w = 1.3) {
+function bench(grp, x, y, z, rot = 0, w = 1.3, lift = 0.03) {
+  aoFurniture(grp, x, y, z, rot, 0.17, w / 2, 0.32, 0.3, lift);
   const g = new THREE.Group();
   mesh(box(0.34, 0.05, w), M.wood, [0, 0.44, 0], g);
   for (const s of [-1, 1]) mesh(box(0.3, 0.42, 0.05), M.darkWood, [0, 0.21, s * (w / 2 - 0.06)], g);
@@ -983,6 +1185,7 @@ function bench(grp, x, y, z, rot = 0, w = 1.3) {
   grp.add(g);
 }
 function shelfUnit(grp, x, y, z, rot, w = 2, h = 2, d = 0.4, fill) {
+  aoFurniture(grp, x, y, z, rot, w / 2, d / 2, 0.45, 0.38);
   const g = new THREE.Group();
   for (const s of [-1, 1]) mesh(box(0.05, h, d), M.darkWood, [s * w / 2, h / 2, 0], g);
   mesh(box(w, h, 0.03), M.darkWood, [0, h / 2, -d / 2], g);
@@ -1063,6 +1266,7 @@ const shelfInst = (g, geo, mat, x, y, z, s, ry = 0) => inst(geo, mat, toWorld(g,
   addInteract(grp, [12.7, P + 1.75, 0], 'Read the lesson', () => showInfo(INFO.classB), 3.4);
   person({ x: 11.8, z: 0.9, y: P, rotY: -Math.PI / 2, parent: grp, shirt: 0x2f6f63, pants: 0x2a2a2a, anim: 'teach', shadow: false });
   for (const tx of [4.6, 8.6]) {
+    aoFurniture(grp, tx, P, -0.6, 0, 1.2, 0.55, 0.45, 0.3);
     mesh(box(2.4, 0.06, 1.1), M.wood, [tx, P + 0.86, -0.6], grp);
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) mesh(box(0.06, 0.83, 0.06), M.darkWood, [tx + sx * 1.1, P + 0.42, -0.6 + sz * 0.48], grp);
     // Seedling tray, jars of dried mango, chopping board with slices
@@ -1081,6 +1285,7 @@ const shelfInst = (g, geo, mat, x, y, z, s, ry = 0) => inst(geo, mat, toWorld(g,
   mesh(box(0.1, 0.16, 0.03), M.white, [3.5, P + 1.3, 4.5 - WALL_T / 2 - 0.015], grp, { cast: false, solid: false });
   addInteract(grp, [3.5, P + 1.3, 4.3], () => (lampB.on ? 'Switch the lights off' : 'Switch the lights on'), () => toggleLamp(lampB), 1.8);
   // Crates of harvest by the lab wall
+  aoFurniture(grp, 11.3, P, -3.7, 0, 1.05, 0.25, 0.4, 0.38);
   for (let i = 0; i < 6; i++) inst(G.box, i % 2 ? M.crate : M.crateGreen, toWorld(grp, 10.6 + (i % 3) * 0.7, P + 0.18 + Math.floor(i / 3) * 0.36, -3.7), [0, 0, 0], [0.62, 0.34, 0.46]);
 }
 
@@ -1100,6 +1305,7 @@ const shelfInst = (g, geo, mat, x, y, z, s, ry = 0) => inst(geo, mat, toWorld(g,
   addInteract(grp, [-5.9, P + 1.3, -0.3], 'Browse the library', () => showInfo(INFO.library), 3);
   addInteract(grp, [5.9, P + 1.3, -0.3], 'Browse the library', () => showInfo(INFO.library), 3);
   // Reading table
+  aoFurniture(grp, -1.8, P, -0.6, 0, 0.6, 1.5, 0.45, 0.3);
   mesh(box(1.2, 0.06, 3), M.wood, [-1.8, P + 0.75, -0.6], grp);
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) mesh(box(0.06, 0.72, 0.06), M.darkWood, [-1.8 + sx * 0.5, P + 0.36, -0.6 + sz * 1.4], grp);
   for (const s of [-1, 1]) {
@@ -1165,7 +1371,49 @@ for (const p of pickables) {
   addInteract(null, p.pos, `Pick ${names[p.kind]}`, () => pickFruit(p.kind), 2.6);
 }
 
+// Contact shadows for outdoor props, the cool store and everyone standing
+{
+  const R = (x, z, hw, hd, yaw, sp, st, o) => aoRect(x, z, hw, hd, yaw, sp, st, o);
+  R(-6, 4, 0.6, 0.6, 0, 0.6, 0.4);                    // flag base
+  R(9.2, 23.45, 1.05, 0.08, -0.4, 0.55, 0.3);         // school sign
+  R(12, -24, 1.3, 1.3, 0, 1.3, 0.38);                 // water tower legs
+  aoDisc(8, -24, 0.6, 0.3);                           // solar panel post
+  R(46.5, -14.1, 3.3, 1.05, 0, 0.8, 0.42);            // compost bays
+  R(-26, -18, 1.8, 0.8, 0.2, 0.7, 0.42);              // solar dryer
+  R(-32, -17, 2.2, 1.9, 0, 1.0, 0.45);                // cool store hut
+  R(-29, -15, 0.95, 0.25, 0, 0.4, 0.4);               // crates by the dryer
+  R(-34.6, -17.7, 0.32, 1.15, 0, 0.4, 0.35);          // clay pots
+  R(-34, 20, 3.0, 1.85, 0, 0.6, 0.36);                // nursery benches
+  R(10, 9.8, 1.25, 0.08, 0, 0.5, 0.3);                // outdoor chalkboard
+  for (let r = 0; r < 3; r++) R(10, 12 + r * 1.25, 1.7, 0.18, 0, 0.4, 0.34);
+  R(-20, 18, 5.5, 4, 0, 1.0, 0.38);                   // dining slab
+  for (const tz of [16.4, 19.6]) {
+    R(-20, tz, 3, 0.5, 0, 0.45, 0.3, { y: 0.15 });
+    for (const bs of [-1, 1]) R(-20, tz + bs * 0.85, 3, 0.15, 0, 0.3, 0.24, { y: 0.15 });
+  }
+  R(-16.4, 18, 0.5, 0.6, 0, 0.35, 0.3, { y: 0.15 });  // cooking station
+  R(30.2, 30.5, 3.9, 1.1, 0, 0.9, 0.5);               // truck
+  R(29.1, 22.8, 1.45, 0.6, 0, 0.5, 0.4);              // crate pile
+  R(27.55, 24.2, 1.25, 0.3, 0, 0.4, 0.35);            // baskets
+  // Cool store: occlusion along the inside wall bases
+  const hg = HUT.grp, hx = 2 - WALL_T / 2, hz = 1.7 - WALL_T / 2, hy = 0.15;
+  aoEdgeIn(hg, -hx, -hz, hx, -hz, 0, 1, 0.7, 0.34, hy);
+  for (const [a0, a1] of runs(-hx, hx, [[-0.65, 0.65]])) aoEdgeIn(hg, a0, hz, a1, hz, 0, -1, 0.7, 0.34, hy);
+  aoEdgeIn(hg, -hx, -hz, -hx, hz, 1, 0, 0.7, 0.34, hy);
+  aoEdgeIn(hg, hx, -hz, hx, hz, -1, 0, 0.7, 0.34, hy);
+  scene.updateMatrixWorld(true);
+  for (const g of people) {
+    if (!g.userData.legs.length || ['carry', 'seated', 'eat', 'read'].includes(g.userData.anim)) continue;
+    const wp = g.getWorldPosition(new THREE.Vector3());
+    aoDisc(wp.x, wp.z, 0.42 * g.scale.x, 0.42, { y: wp.y + (g.parent === scene ? 0.06 : 0.03) });
+  }
+  buildContactShadows();
+}
+
 flushBatches();
+// Materials made after the envMapIntensity pass (doors, lamps, people, props)
+// get the same eased sky light; tuned ones (floor, ceiling) keep their values.
+scene.traverse((o) => { if (o.isMesh) for (const m of [].concat(o.material)) if (m && m.envMapIntensity === 1) m.envMapIntensity = 0.8; });
 collectSolids();
 scene.updateMatrixWorld(true);
 for (const g of people) {
@@ -1714,7 +1962,7 @@ if (coarse) { document.getElementById('btnWalk').hidden = true; document.getElem
 
 // Keyboard
 addEventListener('keydown', (e) => {
-  if (typing(e)) return;
+  if (e.defaultPrevented || typing(e)) return;
   if (e.code === 'Escape') { goToMainMenu(); return; }
   if (e.code === 'KeyF' && !e.repeat && !flight) { mode === 'walk' ? leaveWalk(false) : enterWalk(); return; }
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
