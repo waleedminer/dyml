@@ -53,12 +53,12 @@ export const HOTSPOTS = [
       'The backbone of the orchard: hardy, deep-rooted trees that suit Sierra Leone’s long dry season and produce for decades. This is the endowment (waqf) that keeps giving.',
     sections: [
       { h: 'Crops', items: [
-        'Grafted mango (e.g. Kent, Keitt), bearing in 3–4 years',
+        'Grafted mango, bearing within a few years',
         'Cashew, a high-value export crop that tolerates poor soils',
         'Avocado and soursop as companion trees',
       ]},
       { h: 'Layout', items: [
-        '8 m × 8 m spacing in rows running east–west for even sunlight',
+        'Wide spacing in straight rows for sunlight and easy harvest (exact spacing to be confirmed)',
         'Mulch rings around every trunk to hold moisture',
       ]},
     ],
@@ -70,7 +70,7 @@ export const HOTSPOTS = [
     pos: [30, 4.6, -3],
     view: { cam: [42, 6, 6], target: [29, 1.5, -3] },
     summary:
-      'Oranges, limes and grapefruit: daily vitamin C for students and a steady market crop that fruits within 2–3 years.',
+      'Oranges, limes and grapefruit: daily vitamin C for students and a steady market crop that fruits sooner than mango.',
     sections: [
       { h: 'Crops', items: [
         'Sweet orange, lime, grapefruit',
@@ -99,12 +99,12 @@ export const HOTSPOTS = [
     title: 'Water & Irrigation',
     kicker: 'Sustainable systems',
     pos: [12, 10.5, -24],
-    view: { cam: [0, 8, -10], target: [13, 4, -23] },
+    view: { cam: [26, 9, -36], target: [12, 4, -24] },
     summary:
-      'Rainwater from the school roofs and a borehole fill an elevated tank. Gravity-fed drip lines carry water to every tree through the dry season (November to April).',
+      'Rainwater from the school roofs and a borehole fill an elevated tank. Gravity-fed drip lines carry water to every tree through the dry season.',
     sections: [
       { h: 'How it works', items: [
-        'Roof gutters capture rainy-season water (May to October)',
+        'Roof gutters capture rainy-season water',
         'Solar pump lifts borehole water when the tank runs low',
         'Drip lines put water right at the roots, using far less water than flooding',
         'Students run the daily checks: valves, leaks, tank level',
@@ -122,7 +122,7 @@ export const HOTSPOTS = [
     sections: [
       { h: 'The cycle', items: [
         'Bay 1: fresh inputs from the school kitchen and orchard',
-        'Bay 2: turning and heating (about 6 weeks)',
+        'Bay 2: turning and heating for several weeks',
         'Bay 3: finished compost, spread around the trees',
       ]},
     ],
@@ -200,7 +200,7 @@ export const TOUR = [
   {
     tag: 'The problem',
     title: '82% of Sierra Leone is food insecure',
-    text: '26% of children are stunted from malnutrition and 86.3% of rural households live in poverty. Yet the land here is fertile. How might we design an orchard that gives this community reliable food and income?',
+    text: 'That is the World Food Programme figure. 26% of children are stunted from malnutrition, and rural poverty stands at 86.3%. How might we design an orchard that gives this community reliable food and income?',
     view: { cam: [-62, 42, 72], target: [6, 0, 0] },
   },
   {

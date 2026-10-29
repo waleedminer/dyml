@@ -140,6 +140,7 @@ body.touring .toolbar, body.touring .controls-hint { display: none; }
   .controls-hint { display: none; }
   .hotspot .label { display: none; }
   .hotspot.active .label { display: block; }
+  @media (max-width: 420px) { .brand { font-size: 0; } .brand-mark { font-size: 22px; } .topbar { padding: 10px 16px; } }
   @keyframes rise2 { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: none; } }
 }
 

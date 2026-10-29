@@ -9,7 +9,7 @@ import { HOTSPOTS, TOUR } from './data.js';
 // ---------------------------------------------------------------------------
 const canvas = document.getElementById('scene');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -55,7 +55,7 @@ scene.add(new THREE.HemisphereLight(0xe4f0ff, 0x6a5534, 0.35));
 const sunLight = new THREE.DirectionalLight(0xffefd2, 2.8);
 sunLight.position.copy(sun).multiplyScalar(150);
 sunLight.castShadow = true;
-sunLight.shadow.mapSize.set(4096, 4096);
+sunLight.shadow.mapSize.set(2048, 2048);
 Object.assign(sunLight.shadow.camera, { left: -85, right: 85, top: 85, bottom: -85, near: 1, far: 420 });
 sunLight.shadow.bias = -0.0003;
 sunLight.shadow.normalBias = 0.05;
@@ -812,7 +812,7 @@ function openHotspot(id, fly) {
   panel.hidden = false;
   hideIntro();
   hsEls.forEach((x) => x.el.classList.toggle('active', x.h.id === id));
-  if (fly) { if (walk.on) setWalk(false); flyTo(h.view); }
+  if (fly) { if (walk.on) setWalk(false); if (tourIdx >= 0) endTour(); hsEls.forEach((x) => x.el.classList.toggle('active', x.h.id === id)); flyTo(h.view); }
 }
 function closePanel() {
   panel.hidden = true;
@@ -830,6 +830,8 @@ function flyTo(view, dur = 1.8) {
     p0: camera.position.clone(), p1: new THREE.Vector3(...view.cam),
     t0: controls.target.clone(), t1: new THREE.Vector3(...view.target),
   };
+  controls.enableDamping = false;
+  controls.update();
   controls.enabled = false;
 }
 const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
@@ -842,7 +844,7 @@ function updateFlight(dt) {
   camera.position.lerpVectors(flight.p0, flight.p1, k).y += lift;
   controls.target.lerpVectors(flight.t0, flight.t1, k);
   camera.lookAt(controls.target);
-  if (flight.t >= 1) { flight = null; controls.enabled = true; }
+  if (flight.t >= 1) { flight = null; controls.enabled = true; controls.enableDamping = true; }
 }
 
 // ---------------------------------------------------------------------------
@@ -896,6 +898,7 @@ const hint = document.getElementById('controlsHint');
 const walkBtn = document.getElementById('btnWalk');
 function setWalk(on) {
   walk.on = on;
+  walk.keys.clear();
   flight = null;
   controls.enabled = !on;
   walkBtn.classList.toggle('on', on);
@@ -924,6 +927,9 @@ canvas.addEventListener('pointermove', (e) => {
   walk.drag = { x: e.clientX, y: e.clientY };
 });
 canvas.addEventListener('pointerup', () => (walk.drag = null));
+canvas.addEventListener('pointercancel', () => (walk.drag = null));
+addEventListener('blur', () => walk.keys.clear());
+if (matchMedia('(pointer: coarse)').matches) walkBtn.hidden = true;
 function updateWalk(dt) {
   const k = walk.keys, speed = (k.has('ShiftLeft') || k.has('ShiftRight') ? 9 : 4) * dt;
   const f = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0);
@@ -950,7 +956,7 @@ function updateHotspots() {
     const dist = camera.position.distanceTo(v);
     el.style.transform = `translate(${(tmp.x * 0.5 + 0.5) * w}px, ${(-tmp.y * 0.5 + 0.5) * h}px)`;
     el.style.zIndex = String(1000 - Math.round(dist));
-    el.classList.toggle('far', dist > 75);
+    el.classList.toggle('far', dist > 140);
   }
 }
 function animate() {

@@ -74,5 +74,8 @@
   <div id="loader"><div class="spinner"></div><p>Planting the orchard…</p></div>
 
   <script type="module" src="js/main.js"></script>
+  <script>
+    setTimeout(() => { const l = document.getElementById('loader'); if (l && !l.classList.contains('done')) l.querySelector('p').textContent = 'The 3D view could not load. Please try another browser or network.'; }, 15000);
+  </script>
 </body>
 </html>
