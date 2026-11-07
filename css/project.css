@@ -13,7 +13,7 @@
   --shadow-tile: 0 4px 14px rgba(20, 30, 20, 0.06);   /* lighter sibling of var(--shadow) */
   --body-ink: #39413b;                /* the one tone between --ink and --muted */
   --laterite-ink: #9c4f2a;            /* laterite darkened for small text (AA on white/cream) */
-  --ph-ink: #8a5100;                  /* placeholder pair with #fbe3b8, same as .badge in style.css */
+  --ph-ink: #9a3412;                  /* placeholder ink, same as .badge in style.css */
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -28,7 +28,7 @@ body.page { overflow-x: clip; line-height: 1.6; }
 .skip-link {
   position: absolute; left: 16px; top: -60px; z-index: 40;
   background: var(--mango); color: var(--green); font: 600 14px var(--sans);
-  padding: 10px 16px; border-radius: 999px; text-decoration: none;
+  padding: 10px 16px; border-radius: var(--pill); text-decoration: none;
   transition: top .3s var(--ease-soft);
 }
 .skip-link:focus { top: 12px; }
@@ -36,7 +36,7 @@ body.page { overflow-x: clip; line-height: 1.6; }
 .page .btn:focus-visible {
   outline: 2px solid var(--mango);
   outline-offset: 3px;
-  border-radius: 999px;
+  border-radius: var(--pill);
 }
 .page .step a:focus-visible { border-radius: 4px; }
 .page section[id] { scroll-margin-top: calc(var(--tb-h) + var(--sn-h) + 12px); }
@@ -117,7 +117,7 @@ body.page { overflow-x: clip; line-height: 1.6; }
 .section-nav a {
   flex: none; text-decoration: none; white-space: nowrap;
   font: 500 13.5px var(--sans); color: var(--muted);
-  padding: 7px 13px; border-radius: 999px;
+  padding: 7px 13px; border-radius: var(--pill);
   transition: background .25s var(--ease-soft), color .25s var(--ease-soft);
 }
 .section-nav a:hover { background: rgba(31, 59, 44, 0.07); color: var(--green); }
