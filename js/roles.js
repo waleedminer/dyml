@@ -209,7 +209,7 @@ export function initRoles(ctx) {
       complete(s);
     }
   }
-  for (const ev of ['hotspot', 'info', 'walk', 'tour', 'pick', 'truck', 'share', 'sponsor', 'door', 'quiz', 'apply', 'arrive']) ctx.on(ev, (d) => onEvent(ev, d));
+  for (const ev of ['hotspot', 'info', 'walk', 'tour', 'pick', 'truck', 'share', 'sponsor', 'door', 'quiz', 'apply', 'arrive', 'fund']) ctx.on(ev, (d) => onEvent(ev, d));
 
   // Notes appended to an info panel for the current role (HTML, from our own data only)
   function notesFor(id) {

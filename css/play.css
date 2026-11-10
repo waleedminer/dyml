@@ -504,3 +504,39 @@ body:has(.quiz-pop:not([hidden])) :is(.toast, .quest-card) { display: none !impo
 .ap-next { margin-top: 6px; padding: 10px 12px; border-radius: var(--radius-sm); background: rgba(31, 107, 69, 0.08); font-size: 13px; }
 .ap-next b { display: block; color: var(--green); margin-bottom: 4px; }
 .ap-next ol { margin: 0; padding-left: 18px; display: grid; gap: 3px; color: var(--body-ink); }
+
+/* ===== Fundable systems: floating progress bar and donation card ===== */
+.fund-bar {
+  position: fixed; left: 0; top: 0; z-index: 12; transform-origin: 50% 100%; width: 250px; padding: 9px 11px 9px; border: 0; cursor: pointer; text-align: left;
+  display: grid; gap: 6px; border-radius: var(--radius-sm); background: rgba(12, 26, 18, 0.86); color: #fff; font-family: var(--sans);
+  box-shadow: var(--shadow), 0 0 0 1px rgba(255, 255, 255, 0.08); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  transition: box-shadow .2s var(--ease-out), background .2s var(--ease-out);
+}
+.fund-bar::after { content: ''; position: absolute; left: 50%; bottom: -7px; width: 14px; height: 14px; background: rgba(12, 26, 18, 0.86); transform: translateX(-50%) rotate(45deg); border-radius: 2px; }
+.fund-bar:hover, .fund-bar:focus-visible { background: rgba(12, 26, 18, 0.95); box-shadow: var(--shadow), 0 0 0 3px var(--mango); outline: none; }
+.fund-head { display: flex; align-items: center; gap: 7px; }
+.fund-icon { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: rgba(42, 157, 244, 0.25); color: #8fd0ff; }
+.fund-icon svg { width: 14px; height: 14px; }
+.fund-title { font: 700 13.5px var(--sans); flex: 1; }
+.fund-pct { font: 800 15px var(--serif); color: var(--mango); font-variant-numeric: tabular-nums; }
+.fund-track { display: block; height: 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.16); overflow: hidden; position: relative; }
+.fund-fill { display: block; height: 100%; width: 0; border-radius: 999px; background: linear-gradient(90deg, #2a9df4, #8fd0ff); transition: width .9s var(--ease-out); position: relative; min-width: 0; }
+.fund-track::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.22) 50%, transparent 100%); transform: translateX(-100%); animation: fundShine 3.2s var(--ease) infinite; }
+@keyframes fundShine { 60%, 100% { transform: translateX(100%); } }
+.fund-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; font: 500 11.5px var(--sans); color: rgba(255, 255, 255, 0.82); }
+.fund-cta { font: 700 11.5px var(--sans); color: var(--green); background: var(--mango); padding: 3px 9px; border-radius: var(--pill); white-space: nowrap; }
+.fund-bar.funded .fund-fill { background: linear-gradient(90deg, #1f6b45, #5fcf8a); }
+.fund-bar.funded .fund-cta { background: #5fcf8a; }
+body.reduce-motion .fund-track::after { animation: none; }
+body.cinematic .fund-bar, body.role-picking .fund-bar, body.sp-open .fund-bar, body.ap-open .fund-bar { display: none !important; }
+body.present .fund-bar { width: 300px; }
+body.present .fund-title { font-size: 15px; }
+.fund-progress { display: grid; gap: 6px; margin-bottom: 12px; }
+.fund-tiers { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.fund-tiers .sp-share b { font-size: 14px; }
+.fund-tiers .sp-share span { font-size: 11px; }
+.fund-donors { margin: 0 0 6px; font-size: 13px; color: var(--muted); }
+.fund-card .sp-cost { margin-bottom: 6px; }
+@media (max-width: 720px) { .fund-bar { width: 210px; } .fund-tiers { grid-template-columns: repeat(2, 1fr); } }
+.panel-fund { width: 100%; justify-content: center; margin: 4px 0 14px; background: #2a9df4; border-color: #2a9df4; }
+.panel-fund:hover { background: #1f86d6; border-color: #1f86d6; }

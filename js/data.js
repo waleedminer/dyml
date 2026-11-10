@@ -381,7 +381,8 @@ export const ROLES = {
         { id: 'compost', label: 'See the compost station', event: 'hotspot', match: ['compost'], at: [46, 1, -14], r: 5, title: 'Free fertilizer', text: 'Three bays turn kitchen scraps and leaves into compost. Volunteers turn it with students on Thursdays.', do: 'Press E at the bays' },
         { id: 'walk', label: 'Walk the orchard in first person', event: 'arrive', at: [30, 1, -5], r: 6, kb: true, title: 'The citrus rows', text: 'Oranges, limes and grapefruit, fruiting within two years. Pruning walks happen here every dry season.', do: 'Look around, then follow the light' },
         { id: 'truck', label: 'Load a harvest onto the truck', event: 'truck', at: [30, 1.4, 27], r: 5, kb: true, title: 'Market day', text: 'Surplus is graded, crated and trucked to town. Pick a mango on the way if your basket is empty.', do: 'Press E at the truck with fruit in your basket' },
-        { id: 'sponsor', label: 'Sponsor a tree', event: 'sponsor', at: 'tree', r: 5, title: 'Put a name on a tree', text: 'Every long-term tree can be sponsored as waqf and carries its sponsor’s name on a plaque.', do: 'Press E at the tree, or click it' },
+        { id: 'sponsor', label: 'Sponsor a tree', event: 'sponsor', at: 'tree', r: 5, title: 'Put a name on a tree', text: 'Every long-term tree can be sponsored as an endowment and carries its sponsor’s name on a plaque.', do: 'Press E at the tree, or click it' },
+        { id: 'fund', label: 'Help build the water tank', event: 'fund', match: ['tank'], at: [12, 2, -24], r: 6, title: 'The tank that keeps the trees alive', text: 'Without this tank the young trees die in the first dry season. The bar above it shows how close the community is.', do: 'Click the progress bar above the tank' },
       ],
       done: { title: 'You know where to help', text: 'The orchard needs hands at planting, grafting and market days, and sponsors for its long-term trees.', cta: { label: 'Sponsor a tree', action: 'sponsor' } },
     },
@@ -466,6 +467,7 @@ export const ROLES = {
         { id: 'lesson', label: 'Read a lesson plan', event: 'info', match: ['classA', 'classB'], kb: true, at: { interact: 'Read the lesson', near: [-12, 2, -9] }, r: 4, title: 'Term 1: Soil and seeds', text: 'The board carries the lesson flow: warm-up, demo, group soil test, sowing, reflection.', do: 'Press E at the board' },
         { id: 'accounts', label: 'Review the orchard accounts', event: 'info', match: ['truck', 'ledger'], at: { interact: 'Read the orchard accounts' }, r: 3, title: 'The business term', text: 'Students keep these books in term 4. One week of entries per group makes a good assessment.', do: 'Press E at the ledger in the admin block' },
         { id: 'tour', label: 'Take the guided tour', event: 'tour', title: 'See the whole story', text: 'Six stops, two minutes: the problem, the solution and the impact, ready to project for a class.', do: 'Press Tour in the bottom bar' },
+        { id: 'fund', label: 'Help build the water tank', event: 'fund', match: ['tank'], at: [12, 2, -24], r: 6, title: 'A class project with a number on it', text: 'The bar above the tank shows the estimate and what has been raised. A class can watch it climb through the term.', do: 'Click the progress bar above the tank' },
       ],
       done: { title: 'You have a term of lessons', text: 'Every stop in the model now carries a question, an activity and an assessment you can run with a class.', cta: { label: 'Open the curriculum outline', href: 'project.html#curriculum' } },
     },
@@ -538,4 +540,22 @@ export const QUIZ = {
   dining: { q: 'What happens to the share of the harvest that is not sold?', o: ['It goes on the compost', 'It feeds students at lunch and goes home to families', 'It is stored until next year'], a: 1, why: 'The orchard fights hunger right where it grows.' },
   coolStore: { q: 'How does a zeer pot keep produce cool without electricity?', o: ['Ice is delivered from town each morning', 'A small fan blows air through it', 'Water evaporating from wet sand between two pots pulls heat out'], a: 2, why: 'Evaporation takes heat with it, the same way sweat cools skin.' },
   ledger: { q: 'Where does the money from a sold crate go?', o: ['All of it to the truck owner', 'It is kept by the buyer', 'Split between orchard upkeep, the school fund and families'], a: 2, why: 'The split is written down so the income stays transparent.' },
+};
+
+// ---------------------------------------------------------------------------
+// Fundable systems. Each has a goal, an itemised estimate (prototype figures
+// pending local quotes), and a progress bar that floats above it in the model.
+// ---------------------------------------------------------------------------
+export const PROJECTS = {
+  tank: {
+    id: 'tank', title: 'Water storage tank', short: 'Water tank',
+    pos: [12, 9.9, -24],
+    goal: 4800,
+    why: 'Young trees die in the dry season without water. This elevated 10,000-litre tank, filled by the roof gutters and a solar pump, feeds every drip line by gravity for the whole orchard.',
+    cost: [['10,000-litre tank', 1200], ['Steel tower and base', 1400], ['Solar pump and panels', 1100], ['Gutters, header pipe and drip lines', 700], ['Borehole connection and fittings', 400]],
+    tiers: [25, 60, 120, 250],
+    defaultTier: 60,
+    receives: ['Your name on the tank sign in the model and on site', 'A photo when the tank is lifted onto its tower', 'A note from the student water team after the first dry season'],
+    note: 'Estimate pending local quotes from Freetown suppliers. Every pledge is recorded and the Foundation follows up.',
+  },
 };

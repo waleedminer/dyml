@@ -151,9 +151,9 @@ export function initQuest(ctx) {
       cardNext.textContent = 'Got it';
     }
     // Direct action for reading steps, so nobody has to find the exact spot to aim at
-    const direct = !done && (s.event === 'hotspot' || s.event === 'info' || s.event === 'sponsor' || s.event === 'tour');
+    const direct = !done && (s.event === 'hotspot' || s.event === 'info' || s.event === 'sponsor' || s.event === 'tour' || s.event === 'fund');
     cardAct.hidden = !direct;
-    if (direct) cardAct.textContent = s.event === 'sponsor' ? 'Sponsor this tree →' : s.event === 'tour' ? 'Start the tour →' : 'Read it now →';
+    if (direct) cardAct.textContent = s.event === 'sponsor' ? 'Sponsor this tree →' : s.event === 'tour' ? 'Start the tour →' : s.event === 'fund' ? 'Fund the tank →' : 'Read it now →';
     cardNext.classList.toggle('primary', !direct);
     card.hidden = false;
     card.classList.remove('in'); void card.offsetWidth; card.classList.add('in');

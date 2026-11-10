@@ -16,12 +16,13 @@ import { initQuiz } from './quiz.js';
 import { initPresent } from './present.js';
 import { initQuest } from './quest.js';
 import { initJuice } from './juice.js';
+import { initFund } from './fund.js';
 
 // Small event bus: the role missions listen for what you do in the model.
 const bus = new EventTarget();
 const emit = (name, detail) => bus.dispatchEvent(new CustomEvent(name, { detail }));
 const on = (name, fn) => bus.addEventListener(name, (e) => fn(e.detail));
-let roles = null, sponsor = null, tutorial = null, quiz = null, quest = null, juice = null; // set up once the scene exists (bottom of this file)
+let roles = null, sponsor = null, tutorial = null, quiz = null, quest = null, juice = null, fund = null; // set up once the scene exists (bottom of this file)
 
 // ---------------------------------------------------------------------------
 // Renderer, scene, camera
@@ -1619,6 +1620,13 @@ function renderPanel(h) {
   document.getElementById('panelBody').innerHTML = h.sections.map((s) => `
     <h3>${s.h}${s.placeholder ? ' <span class="badge">Placeholder · team to finalize</span>' : ''}</h3>
     <ul>${s.items.map((t) => `<li>${t}</li>`).join('')}</ul>`).join('') + (roles ? roles.notesFor(h.id) : '');
+  if (h.id === 'irrigation' && fund) {
+    const t = fund.total('tank'), pct = Math.min(100, Math.round((t.amount / 4800) * 100));
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'btn primary panel-fund';
+    b.textContent = `Fund the water tank · ${pct}% so far`;
+    b.addEventListener('click', () => fund.open('tank'));
+    document.getElementById('panelBody').prepend(b);
+  }
   quiz?.mount(h.id, document.getElementById('panelBody'));
   panel.hidden = false;
   panel.scrollTop = 0;
@@ -2319,6 +2327,7 @@ function stepAction(s) {
   if (s.event === 'info' && id) { showInfo(INFO[id] || HOTSPOTS.find((h) => h.id === id)); return; }
   if (s.event === 'sponsor') { const t = trees.find((x) => !sponsor.funded(x.id)) || trees[0]; if (mode === 'walk') sponsor.open(t); else sponsorAny(); return; }
   if (s.event === 'tour') { startTour(); return; }
+  if (s.event === 'fund') { fund.open(s.match?.[0] || 'tank'); return; }
   if (s.event === 'pick') { toast(`Look at a tree and press P${s.count ? ` (${s.count} times)` : ''}.`); return; }
   if (s.event === 'truck' || s.event === 'share') { toast(basketCount() ? 'Look at it and press E.' : 'Your basket is empty. Pick fruit first (P at a tree).'); return; }
   if (s.event === 'door') { toast('Look at the door and press E.'); return; }
@@ -2461,6 +2470,7 @@ function animate() {
   if (FLAG) FLAG.rotation.y = Math.sin(t * 1.4) * 0.12 + Math.sin(t * 3.1) * 0.04;
   updateHotspots();
   if (sponsor) { sponsor.update(dt, t); sponsor.place(); }
+  if (fund) fund.place();
   if (quest) quest.update(dt, t);
   if (juice) juice.update(dt);
   if (composer) composer.render(); else renderer.render(scene, camera);
@@ -2475,7 +2485,10 @@ addEventListener('resize', () => {
 });
 
 // Deep links: #mango opens that hotspot; #sponsor=mango-1-1 flies to that tree and opens its sponsor card
-if (location.hash.startsWith('#sponsor=')) {
+if (location.hash.startsWith('#fund=')) {
+  const id = location.hash.slice(6);
+  setTimeout(() => { hideMenu(); flyToPoint(new THREE.Vector3(12, 6, -24), 18); setTimeout(() => fund.open(id), 1800); }, 600);
+} else if (location.hash.startsWith('#sponsor=')) {
   const id = decodeURIComponent(location.hash.slice(9));
   setTimeout(() => { const t = trees.find((x) => x.id === id); if (t) { hideMenu(); flyToTree(t); sponsor.hover(t, true); setTimeout(() => sponsor.open(t), 1600); } }, 600);
 } else if (location.hash.length > 1 && location.hash !== '#intro') setTimeout(() => openHotspot(location.hash.slice(1), true), 400);
@@ -2487,7 +2500,7 @@ function track(name, detail) {
   while (events.length > 500) events.shift();
   try { localStorage.setItem('wos.events', JSON.stringify(events)); } catch { /* storage blocked */ }
 }
-for (const ev of ['hotspot', 'info', 'walk', 'tour', 'pick', 'truck', 'share', 'sponsor', 'door', 'quiz', 'apply', 'arrive']) on(ev, (d) => track(ev, d));
+for (const ev of ['hotspot', 'info', 'walk', 'tour', 'pick', 'truck', 'share', 'sponsor', 'door', 'quiz', 'apply', 'arrive', 'fund']) on(ev, (d) => track(ev, d));
 track('load', location.search);
 if (location.search.includes('stats')) setTimeout(() => console.table(events.slice(-60)), 1500);
 
@@ -2507,6 +2520,7 @@ initComments({
 // Game layer: roles, tree sponsorship and the cinematic intro
 // ---------------------------------------------------------------------------
 juice = initJuice({ THREE, scene, camera });
+fund = initFund({ THREE, camera, canvas, getMode: () => mode, releasePointer, resumeWalk, toast, emit, hideMenu, flyToPoint, juice });
 sponsor = initSponsor({ THREE, scene, camera, canvas, height, trees, getMode: () => mode, releasePointer, resumeWalk, toast, emit, flyToTree, juice });
 const sponsorAny = () => { const t = trees.find((x) => !sponsor.funded(x.id)) || trees[0]; hideMenu(); flyToTree(t); sponsor.hover(t, true); setTimeout(() => sponsor.open(t), 1500); };
 const apply = initApply({ getMode: () => mode, releasePointer, resumeWalk, toast, emit, hideMenu, showMenu, sponsorAny, getRole: () => roles?.role });
@@ -2543,7 +2557,7 @@ function afterIntro() {
 document.getElementById('replayIntro').addEventListener('click', () => tutorial.play({ onDone: afterIntro }));
 
 // Presentation mode: ?present (clicker keys, jump menu, big captions, seeded demo data); ?present=120 adds a kiosk reset.
-const closeAll = () => { sponsor.close(); apply.close(); quiz.closeCert(); roles.hide(); closePanel(); if (tourIdx >= 0) endTour(); };
+const closeAll = () => { sponsor.close(); apply.close(); fund.close(); quiz.closeCert(); roles.hide(); closePanel(); if (tourIdx >= 0) endTour(); };
 const present = new URLSearchParams(location.search).has('present') ? initPresent({
   tutorial, roles, sponsor, quiz, apply, sponsorAny, openHotspot, startTour, enterWalk, goToMainMenu, showMenu, closeAll,
   isWalking: () => mode === 'walk' && walk.active && !walk.paused,
@@ -2563,7 +2577,7 @@ document.getElementById('hudLock').addEventListener('click', toggleLock);
   paint();
 }
 
-if (location.search.includes('debug')) window.__dbg = { walk, view, camera, doors, interactables, solids, trees, enterWalk, leaveWalk, goToMainMenu, tutorial, roles, sponsor, quiz, quest, juice, walkTo, openHotspot, present, events, composer, get mode() { return mode; } };
+if (location.search.includes('debug')) window.__dbg = { walk, view, camera, doors, interactables, solids, trees, enterWalk, leaveWalk, goToMainMenu, tutorial, roles, sponsor, quiz, quest, juice, fund, walkTo, openHotspot, present, events, composer, get mode() { return mode; } };
 
 reflectMode();
 animate();
@@ -2571,7 +2585,7 @@ requestAnimationFrame(() => {
   document.getElementById('loader').classList.add('done');
   const force = location.search.includes('intro') || location.hash === '#intro' || !!present; // the stage always opens with the intro
   const deepLink = location.hash.length > 1 && location.hash !== '#intro';
-  if (location.hash.startsWith('#sponsor=')) hideMenu();
+  if (location.hash.startsWith('#sponsor=') || location.hash.startsWith('#fund=')) hideMenu();
   if ((force || !tutorial.seen()) && !deepLink) {
     hideMenu();
     setTimeout(() => tutorial.play({ onDone: afterIntro }), 450);
