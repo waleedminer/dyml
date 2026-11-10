@@ -1,8 +1,28 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { HOTSPOTS, TOUR, INFO } from './data.js';
 import { initComments } from './comments.js';
+import { initTutorial } from './tutorial.js';
+import { initRoles } from './roles.js';
+import { initSponsor } from './sponsor.js';
+import { initApply } from './apply.js';
+import { initQuiz } from './quiz.js';
+import { initPresent } from './present.js';
+import { initQuest } from './quest.js';
+import { initJuice } from './juice.js';
+import { initFund } from './fund.js';
+
+// Small event bus: the role missions listen for what you do in the model.
+const bus = new EventTarget();
+const emit = (name, detail) => bus.dispatchEvent(new CustomEvent(name, { detail }));
+const on = (name, fn) => bus.addEventListener(name, (e) => fn(e.detail));
+let roles = null, sponsor = null, tutorial = null, quiz = null, quest = null, juice = null, fund = null; // set up once the scene exists (bottom of this file)
 
 // ---------------------------------------------------------------------------
 // Renderer, scene, camera
@@ -13,16 +33,34 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.85;
+// Filmic tone mapping (AgX, new in r160) with a slightly higher exposure; falls back to ACES.
+renderer.toneMapping = THREE.AgXToneMapping ?? THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = THREE.AgXToneMapping ? 1.05 : 0.85;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0xccd6c4, 110, 380);
+// Exponential haze reads more like a humid afternoon than a hard linear cut-off
+scene.fog = new THREE.FogExp2(0xccd6c4, 0.0030);
 
 const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 2000);
 const OVERVIEW = { cam: [-62, 42, 72], target: [6, 0, 0] };
 camera.position.fromArray(OVERVIEW.cam);
+
+// Post-processing: selective bloom (only the sun, lamps and beacons glow) and a soft vignette.
+// Off on touch devices and with ?nofx; the first thing to drop on a weak GPU.
+const FX = !matchMedia('(pointer: coarse)').matches && !location.search.includes('nofx') && renderer.capabilities.isWebGL2;
+let composer = null;
+if (FX) {
+  composer = new EffectComposer(renderer);
+  composer.addPass(new RenderPass(scene, camera));
+  composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.28, 0.55, 0.92));
+  composer.addPass(new ShaderPass({
+    uniforms: { tDiffuse: { value: null }, strength: { value: 0.26 } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: 'uniform sampler2D tDiffuse; uniform float strength; varying vec2 vUv; void main(){ vec4 c = texture2D(tDiffuse, vUv); float d = distance(vUv, vec2(0.5)); float v = smoothstep(0.38, 0.98, d); gl_FragColor = vec4(c.rgb * (1.0 - strength * v), c.a); }',
+  }));
+  composer.addPass(new OutputPass());
+}
 
 
 // ---------------------------------------------------------------------------
@@ -792,18 +830,37 @@ const pickables = [];
 const ORCH = { x0: 18, x1: 42 };
 const mulch = (x, z, r) => inst(G.cyl, M.mulch, [x, 0.05, z], [0, 0, 0], [r, 0.06, r], false);
 const dripLine = (z) => inst(G.cylLow, M.pipeBlack, [(ORCH.x0 + ORCH.x1) / 2 - 1, 0.08, z + 0.4], [0, 0, Math.PI / 2], [0.035, ORCH.x1 - ORCH.x0 + 4, 0.035], false);
-for (let z = -25; z <= -13; z += 6) {
-  for (let x = ORCH.x0 + 1; x <= ORCH.x1; x += 6) {
-    const cashew = (x + z) % 4 === 0;
-    mangoTree(x + rr(-0.3, 0.3), z + rr(-0.3, 0.3), rr(0.85, 1.05), true, cashew ? M.orange : M.mango);
-    pickables.push({ pos: [x, 1.9, z], kind: cashew ? 'cashew' : 'mango' });
-    mulch(x, z, 1.4);
+// Long-term trees are registered so they can be clicked and sponsored (waqf).
+// Random draws stay in the same order as before so the layout does not shift.
+const trees = [];
+{
+  let row = 0;
+  for (let z = -25; z <= -13; z += 6, row++) {
+    let col = 0;
+    for (let x = ORCH.x0 + 1; x <= ORCH.x1; x += 6, col++) {
+      const cashew = (x + z) % 4 === 0;
+      const tx = x + rr(-0.3, 0.3), tz = z + rr(-0.3, 0.3), s = rr(0.85, 1.05);
+      mangoTree(tx, tz, s, true, cashew ? M.orange : M.mango);
+      const tree = { id: `mango-${row}-${col}`, kind: cashew ? 'cashew' : 'mango', label: `Row ${row + 1}, tree ${col + 1}`, x: tx, z: tz, cy: height(tx, tz) + 2.9 * s, r: 2.3 * s, row, col };
+      trees.push(tree);
+      pickables.push({ pos: [x, 1.9, z], kind: cashew ? 'cashew' : 'mango', tree });
+      mulch(x, z, 1.4);
+    }
+    dripLine(z);
   }
-  dripLine(z);
-}
-for (let z = -8; z <= 2; z += 5) {
-  for (let x = ORCH.x0; x <= ORCH.x1; x += 4) { citrusTree(x + rr(-0.2, 0.2), z + rr(-0.2, 0.2), rr(0.9, 1.1)); mulch(x, z, 1.0); pickables.push({ pos: [x, 1.6, z], kind: 'orange' }); }
-  dripLine(z);
+  row = 0;
+  for (let z = -8; z <= 2; z += 5, row++) {
+    let col = 0;
+    for (let x = ORCH.x0; x <= ORCH.x1; x += 4, col++) {
+      const tx = x + rr(-0.2, 0.2), tz = z + rr(-0.2, 0.2), s = rr(0.9, 1.1);
+      citrusTree(tx, tz, s);
+      const tree = { id: `citrus-${row}-${col}`, kind: 'citrus', label: `Row ${row + 1}, tree ${col + 1}`, x: tx, z: tz, cy: height(tx, tz) + 1.9 * s, r: 1.5 * s, row, col };
+      trees.push(tree);
+      mulch(x, z, 1.0);
+      pickables.push({ pos: [x, 1.6, z], kind: 'orange', tree });
+    }
+    dripLine(z);
+  }
 }
 for (let z = 6; z <= 16; z += 3.5) {
   for (let x = ORCH.x0; x <= ORCH.x1; x += 3) {
@@ -1072,7 +1129,7 @@ function addInteract(anchor, local, label, act, r = 2.4) {
   mesh(box(0.08, 2.4, 0.08), M.darkWood, [1.2, 1.2, -0.06], board);
   board.position.set(cx, 0, cz - 2.2);
   scene.add(board);
-  addInteract(board, [0, 1.6, 0.1], 'Read the lesson', () => showInfo(HOTSPOTS.find((h) => h.id === 'classroom')));
+  addInteract(board, [0, 1.6, 0.1], 'Read the lesson', () => showInfo(HOTSPOTS.find((h) => h.id === 'classroom')), 4.5);
   person({ x: cx + 1.8, z: cz - 1.6, rotY: -0.5, shirt: 0xd9692b, pants: 0x2a2a2a, scarf: 0x2a3b5a, anim: 'teach' });
   for (let r = 0; r < 3; r++) {
     mesh(box(3.4, 0.08, 0.35), M.wood, [cx, 0.42, cz + r * 1.25], scene);
@@ -1105,9 +1162,9 @@ function addInteract(anchor, local, label, act, r = 2.4) {
   inst(G.cyl, M.steel, [px + 3.6, 0.95, pz], [0, 0, 0], [0.35, 0.4, 0.35]);
   mesh(box(1, 0.75, 1.2), M.darkWood, [px + 3.6, 0.375, pz]);
   addInteract(null, [px, 1, pz - 1.6], () => (basketCount() ? `Share your ${basketCount()} fruit at lunch` : 'About the community tables'), () => {
-    if (basketCount()) { const n = basketCount(); clearBasket(); toast(`Shared ${n} fruit at the community tables. A share of every harvest stays here.`); }
+    if (basketCount()) { const n = basketCount(); clearBasket(); toast(`Shared ${n} fruit at the community tables. A share of every harvest stays here.`); if (juice) { juice.burst(new THREE.Vector3(-20, 1.4, 16.5), 0xff8a1f, 18); juice.floatText(new THREE.Vector3(-20, 1.8, 16.5), `${n} shared`); juice.sfx.right(); } emit('share', n); }
     else showInfo(HOTSPOTS.find((h) => h.id === 'dining'));
-  }, 3.2);
+  }, 4.5);
 }
 
 { // Truck being loaded with harvest
@@ -1130,9 +1187,9 @@ function addInteract(anchor, local, label, act, r = 2.4) {
   truck.position.set(tx, 0, tz);
   scene.add(truck);
   addInteract(truck, [1, 1.4, -1.3], () => (basketCount() ? `Load your ${basketCount()} fruit onto the truck` : 'About harvest to market'), () => {
-    if (basketCount()) { const n = basketCount(); clearBasket(); sold += n; toast(`Loaded ${n} fruit for market (${sold} so far). Sales fund upkeep, the school and families.`); }
+    if (basketCount()) { const n = basketCount(); clearBasket(); sold += n; toast(`Loaded ${n} fruit for market (${sold} so far). Sales fund upkeep, the school and families.`); if (juice) { juice.burst(new THREE.Vector3(30, 2.2, 29.5), 0xf4e6dc, 22, 3.2); juice.floatText(new THREE.Vector3(30, 2.6, 29.5), `${n} crated`); juice.sfx.load(); setTimeout(() => juice.sfx.honk(), 320); } emit('truck', n); if (!askedKinds.has('truck')) { askedKinds.add('truck'); setTimeout(() => quiz?.prompt('truck', `You just loaded ${n} fruit`), 1200); } }
     else showInfo(HOTSPOTS.find((h) => h.id === 'truck'));
-  }, 3.4);
+  }, 4.5);
   for (let i = 0; i < 14; i++) {
     const cx = 28 + (i % 4) * 0.72, cz = 22.5 + Math.floor(i / 4) % 2 * 0.6, cy = 0.17 + Math.floor(i / 8) * 0.35;
     inst(G.box, i % 3 ? M.crate : M.crateGreen, [cx, cy, cz], [0, rr(-0.08, 0.08), 0], [0.66, 0.34, 0.5]);
@@ -1361,14 +1418,18 @@ const shelfInst = (g, geo, mat, x, y, z, s, ry = 0) => inst(geo, mat, toWorld(g,
 
 // Outdoor info points for walk mode (mirrors the hotspots)
 const infoPoint = (id, p, label, r = 3.5) => addInteract(null, p, label, () => showInfo(HOTSPOTS.find((h) => h.id === id)), r);
-infoPoint('irrigation', [12, 2, -24], 'About water & irrigation', 4);
-infoPoint('compost', [46, 1, -14], 'About the compost station', 3.5);
-infoPoint('preserve', [-26, 1.2, -18], 'About the solar dryer', 3.2);
-infoPoint('nursery', [-34, 1.2, 20], 'About the seedling nursery', 4.5);
+infoPoint('irrigation', [12, 2, -24], 'About water & irrigation', 5.5);
+infoPoint('compost', [46, 1, -14], 'About the compost station', 5);
+infoPoint('preserve', [-26, 1.2, -18], 'About the solar dryer', 4.5);
+infoPoint('nursery', [-34, 1.2, 20], 'About the seedling nursery', 5.5);
 addInteract(SIGN, [0, 1.9, 0.1], 'Read the school sign', () => showInfo(HOTSPOTS.find((h) => h.id === 'school')), 3);
 for (const p of pickables) {
   const names = { mango: 'a mango', cashew: 'a cashew apple', orange: 'an orange' };
-  addInteract(null, p.pos, `Pick ${names[p.kind]}`, () => pickFruit(p.kind), 2.6);
+  if (p.tree) {
+    const tree = p.tree, kind = p.kind;
+    addInteract(null, p.pos, () => `${sponsor?.funded(tree.id)?.share >= 0.999 ? 'See who sponsored this tree' : 'Sponsor this tree'} · P to pick ${names[kind]}`, () => sponsor?.open(tree), 2.6);
+    Object.assign(interactables[interactables.length - 1], { tree, pick: () => pickFruit(kind) });
+  } else addInteract(null, p.pos, `Pick ${names[p.kind]}`, () => pickFruit(p.kind), 2.6);
 }
 
 // Contact shadows for outdoor props, the cool store and everyone standing
@@ -1434,6 +1495,7 @@ const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 function toggleDoor(d) {
   d.open = !d.open;
   d.from = d.a; d.to = d.open ? d.sign * 1.75 : 0; d.t = 0;
+  if (d.open) emit('door', d.name);
 }
 function updateDoors(dt) {
   for (const d of doors) {
@@ -1557,7 +1619,15 @@ function renderPanel(h) {
   document.getElementById('panelSummary').textContent = h.summary;
   document.getElementById('panelBody').innerHTML = h.sections.map((s) => `
     <h3>${s.h}${s.placeholder ? ' <span class="badge">Placeholder · team to finalize</span>' : ''}</h3>
-    <ul>${s.items.map((t) => `<li>${t}</li>`).join('')}</ul>`).join('');
+    <ul>${s.items.map((t) => `<li>${t}</li>`).join('')}</ul>`).join('') + (roles ? roles.notesFor(h.id) : '');
+  if (h.id === 'irrigation' && fund) {
+    const t = fund.total('tank'), pct = Math.min(100, Math.round((t.amount / 4800) * 100));
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'btn primary panel-fund';
+    b.textContent = `Fund the water tank · ${pct}% so far`;
+    b.addEventListener('click', () => fund.open('tank'));
+    document.getElementById('panelBody').prepend(b);
+  }
+  quiz?.mount(h.id, document.getElementById('panelBody'));
   panel.hidden = false;
   panel.scrollTop = 0;
 }
@@ -1568,17 +1638,27 @@ function openHotspot(id, fly) {
   hideMenu();
   hsEls.forEach((x) => x.el.classList.toggle('active', x.h.id === id));
   if (fly) { if (mode === 'walk') leaveWalk(true); if (tourIdx >= 0) endTour(); flyTo(h.view); }
+  emit('hotspot', id);
 }
 // Walk mode: show info without moving the camera; it closes when you walk away or press E.
+let readingHintShown = false;
 function showInfo(h) {
   if (!h) return;
   renderPanel(h);
   walk.panelAt = camera.position.clone();
+  if (mode === 'walk' && walk.active && walk.locked) {
+    releasePointer();
+    if (!readingHintShown) { readingHintShown = true; toast('Your mouse is free to read and answer. Click the world or press E to keep walking.'); }
+  }
+  emit('info', h.id);
+  if (HOTSPOTS.includes(h)) emit('hotspot', h.id);
 }
 function closePanel() {
+  const wasReading = !panel.hidden && !!walk.panelAt;
   panel.hidden = true;
   walk.panelAt = null;
   hsEls.forEach((x) => x.el.classList.remove('active'));
+  if (wasReading && mode === 'walk' && walk.active && walk.paused) resumeWalk();
 }
 document.getElementById('panelClose').addEventListener('click', closePanel);
 
@@ -1612,6 +1692,40 @@ function flyTo(v, dur, onDone) {
   };
   fly.vel.set(0, 0, 0);
 }
+// Cinematic control (the intro): an outside driver poses the camera every frame
+// and all input is ignored until it ends.
+let cinematic = null;
+function beginCinematic(update) {
+  if (mode === 'walk') leaveWalk(true);
+  endTour();
+  closePanel();
+  hideCoach();
+  hideMenu();
+  sponsor?.close();
+  flight = null;
+  keys.clear();
+  fly.pointers.clear();
+  cinematic = { update };
+  reflectMode();
+}
+function endCinematic() {
+  cinematic = null;
+  syncViewFromCamera();
+  fovTarget = 50;
+  reflectMode();
+}
+// Fly to look at a tree (switches to Explore if needed)
+function flyToTree(t, dist = 11) {
+  if (mode === 'walk') leaveWalk(true);
+  endTour();
+  hideMenu();
+  // Approach from the road side (south-east), low enough to read the plaque at the trunk
+  const p = new THREE.Vector3(t.x, t.cy - t.r * 0.45, t.z);
+  const from = new THREE.Vector3(0.45, 0, 1).normalize().multiplyScalar(dist);
+  const cam = p.clone().add(from).setY(Math.max(p.y + dist * 0.42, height(p.x + from.x, p.z + from.z) + 2.2));
+  flyTo({ cam: cam.toArray(), target: p.toArray() });
+}
+
 const _target = new THREE.Vector3();
 function updateFlight(dt) {
   if (!flight) return;
@@ -1685,6 +1799,7 @@ const pinchInfo = () => {
   return { cx, cy, spread: Math.hypot(ps[0].x - ps[1].x, ps[0].y - ps[1].y) };
 };
 canvas.addEventListener('pointerdown', (e) => {
+  if (cinematic) return;
   if (mode === 'walk') return walkPointerDown(e);
   if (flight) return;
   capture(e);
@@ -1693,8 +1808,14 @@ canvas.addEventListener('pointerdown', (e) => {
   fly.pinch = fly.pointers.size === 2 ? pinchInfo() : null;
 });
 canvas.addEventListener('pointermove', (e) => {
+  if (cinematic) return;
   if (mode === 'walk') return walkPointerMove(e);
   const p = fly.pointers.get(e.pointerId);
+  // Hovering (no button held): light up a sponsorable tree under the cursor
+  if (!p && !flight && sponsor && !coarse && !document.body.classList.contains('cm-placing')) {
+    sponsor.hover(treeAt(e.clientX, e.clientY));
+    return;
+  }
   if (!p || flight) return;
   const dx = e.clientX - p.x, dy = e.clientY - p.y;
   p.x = e.clientX; p.y = e.clientY;
@@ -1707,13 +1828,22 @@ canvas.addEventListener('pointermove', (e) => {
   } else if (p.button === 2 || p.button === 1) flyPan(dx, dy);
   else flyLook(dx, dy);
 });
-const endPointer = (e) => { fly.pointers.delete(e.pointerId); fly.pinch = fly.pointers.size === 2 ? pinchInfo() : null; walk.drag = null; };
+const endPointer = (e) => {
+  // A click (not a drag) on a tree in Explore opens its sponsor card
+  const p = fly.pointers.get(e.pointerId);
+  if (p && e.type === 'pointerup' && mode === 'explore' && !cinematic && !flight && fly.moved < 6 && e.button === 0 && fly.pointers.size === 1
+      && sponsor && !document.body.classList.contains('cm-placing')) {
+    const t = treeAt(e.clientX, e.clientY);
+    if (t) { hideMenu(); sponsor.open(t); }
+  }
+  fly.pointers.delete(e.pointerId); fly.pinch = fly.pointers.size === 2 ? pinchInfo() : null; walk.drag = null;
+};
 canvas.addEventListener('pointerup', endPointer);
 canvas.addEventListener('pointercancel', endPointer);
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
-  if (mode !== 'explore' || flight) return;
+  if (mode !== 'explore' || flight || cinematic) return;
   exploreInput();
   flyDolly(-e.deltaY * (e.deltaMode === 1 ? 16 : 1) * 0.6);
 }, { passive: false });
@@ -1746,6 +1876,7 @@ function startTour() {
   document.body.classList.add('touring');
   showTourStep(0);
   reflectMode();
+  emit('tour', 'start');
 }
 function endTour() {
   if (tourIdx < 0) return;
@@ -1775,23 +1906,25 @@ const HINTS = {
   explore: coarse
     ? 'Drag to look · Pinch or two-finger drag to move'
     : '<kbd>Drag</kbd> look <kbd>W A S D</kbd> fly <kbd>Space</kbd>/<kbd>Shift</kbd> up/down <kbd>Scroll</kbd> glide <kbd>F</kbd> walk here',
-  walk: '<kbd>Mouse</kbd> look <kbd>W A S D</kbd> walk <kbd>Space</kbd> jump <kbd>E</kbd> use <kbd>F</kbd> fly <kbd>Esc</kbd> menu',
+  walk: '<kbd>Mouse</kbd> look <kbd>W A S D</kbd> walk <kbd>Space</kbd> jump <kbd>E</kbd> use <kbd>P</kbd> pick <kbd>Esc</kbd> free mouse',
+  walkDrag: '<kbd>Drag</kbd> look <kbd>Click</kbd> go there <kbd>W A S D</kbd> walk <kbd>E</kbd> use <kbd>P</kbd> pick <kbd>L</kbd> lock mouse',
 };
 const COACH = {
   explore: '<b>Explore freely</b><span><kbd>Drag</kbd> to look around</span><span><kbd>W A S D</kbd> to fly where you look</span><span><kbd>Space</kbd> / <kbd>Shift</kbd> to rise and descend</span><span><kbd>F</kbd> to land and walk</span>',
-  walk: '<b>Walk around</b><span><kbd>Mouse</kbd> to look, no clicking needed</span><span><kbd>W A S D</kbd> to walk · <kbd>Shift</kbd> to run · <kbd>Space</kbd> to jump</span><span><kbd>E</kbd> or <kbd>Click</kbd> to open doors, read and pick fruit</span><span><kbd>F</kbd> to fly · <kbd>Esc</kbd> for the main menu</span>',
-  walkDrag: '<b>Walk around</b><span><kbd>Drag</kbd> to look around</span><span><kbd>W A S D</kbd> to walk · <kbd>Shift</kbd> to run · <kbd>Space</kbd> to jump</span><span><kbd>E</kbd> to open doors, read and pick fruit</span><span><kbd>F</kbd> to fly · <kbd>Esc</kbd> for the main menu</span>',
+  walk: '<b>Walk around</b><span><kbd>Mouse</kbd> to look, no clicking needed</span><span><kbd>W A S D</kbd> to walk · <kbd>Shift</kbd> to run · <kbd>Space</kbd> to jump</span><span><kbd>E</kbd> or <kbd>Click</kbd> to open doors, read and sponsor trees · <kbd>P</kbd> to pick fruit</span><span><kbd>F</kbd> to fly · <kbd>Esc</kbd> for the main menu</span>',
+  walkDrag: '<b>Walk around</b><span><kbd>Click</kbd> the ground to walk there · <kbd>Drag</kbd> to look</span><span><kbd>W A S D</kbd> or arrows also walk · <kbd>Space</kbd> to jump</span><span><kbd>E</kbd> or click to open doors, read and sponsor trees · <kbd>P</kbd> to pick fruit</span><span><kbd>L</kbd> to lock the mouse for smooth looking · <kbd>Esc</kbd> for the menu</span>',
 };
 const coached = new Set();
 let coachTimer = 0;
 function coach(kind) {
   if (coached.has(kind)) return;
   coached.add(kind);
-  coachEl.innerHTML = COACH[kind];
+  coachEl.innerHTML = `${COACH[kind]}<button class="close coach-close" type="button" aria-label="Close">×</button>`;
+  coachEl.querySelector('.coach-close').addEventListener('pointerdown', (e) => { e.stopPropagation(); hideCoach(); });
   coachEl.hidden = false;
   coachEl.classList.remove('out');
   clearTimeout(coachTimer);
-  coachTimer = setTimeout(hideCoach, 7000);
+  coachTimer = setTimeout(hideCoach, 10000);
 }
 function hideCoach() {
   if (coachEl.hidden || coachEl.classList.contains('out')) return;
@@ -1804,7 +1937,9 @@ function reflectMode() {
   document.body.classList.toggle('walking', mode === 'walk');
   document.body.classList.toggle('menu-open', !intro.hidden);
   document.querySelectorAll('.mode-btn[data-mode]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === shown)));
-  hint.innerHTML = mode === 'walk' && walk.lockFailed ? HINTS.walk.replace('<kbd>Mouse</kbd>', '<kbd>Drag</kbd>') : HINTS[mode];
+  hint.innerHTML = mode === 'walk' && !walk.locked ? HINTS.walkDrag : HINTS[mode];
+  const lockBtn = document.getElementById('hudLock');
+  if (lockBtn) lockBtn.innerHTML = walk.locked ? '<kbd>Esc</kbd> Free mouse' : '<kbd>L</kbd> Lock mouse';
   hud.hidden = mode !== 'walk';
 }
 function showMenu() { intro.hidden = false; reflectMode(); }
@@ -1864,19 +1999,28 @@ function landingSpot() {
   return { x, y: height(x, z), z, yaw: Math.atan2(-dir.x, -dir.z) };
 }
 
-function enterWalk() {
+function toggleLock() {
+  if (mode !== 'walk') return;
+  if (walk.locked) { walk.releasing = true; walk.lockMode = false; document.exitPointerLock(); reflectMode(); toast('Mouse free. Drag to look, click where you want to go. Press L to lock again.'); return; }
+  walk.lockMode = true; walk.lockFailed = false;
+  requestLock();
+  reflectMode();
+}
+function enterWalk(startAt) {
   if (mode === 'walk' || coarse) return;
   endTour();
   hideMenu();
   closePanel();
+  sponsor?.hover(null, true);
   mode = 'walk';
   keys.clear();
   walk.active = false;
   walk.paused = false;
-  const spot = landingSpot();
+  const spot = startAt ? { x: startAt.x, z: startAt.z, y: supportAt(startAt.x, startAt.z, height(startAt.x, startAt.z) + 0.45), yaw: startAt.yaw ?? 0 } : landingSpot();
   walk.feet.set(spot.x, spot.y, spot.z);
   walk.vel.set(0, 0, 0); walk.vy = 0; walk.grounded = true;
-  requestLock();
+  walk.goal = null; walk.down = null;
+  if (walk.lockMode) requestLock();
   reflectMode();
   const eye = [spot.x, spot.y + EYE, spot.z];
   const ahead = [spot.x - Math.sin(spot.yaw) * 8, spot.y + EYE - 0.15, spot.z - Math.cos(spot.yaw) * 8];
@@ -1884,7 +2028,8 @@ function enterWalk() {
     walk.yaw = view.yaw; walk.pitch = view.pitch;
     walk.eyeY = eye[1];
     walk.active = true;
-    coach(walk.lockFailed ? 'walkDrag' : 'walk');
+    coach(walk.locked ? 'walk' : 'walkDrag');
+    emit('walk', 'start');
   });
 }
 function leaveWalk(silent) {
@@ -1918,8 +2063,8 @@ function requestLock() {
 }
 function onLockError() {
   if (mode !== 'walk') return;
-  if (walk.everLocked) { showResume(); return; } // browsers refuse an instant re-lock; ask for a click
-  walk.lockFailed = true;
+  if (walk.everLocked && walk.lockMode) { showResume(); return; } // browsers refuse an instant re-lock; ask for a click
+  walk.lockFailed = true; walk.lockMode = false;
   reflectMode();
 }
 function showResume() { if (mode === 'walk' && !walk.lockFailed) { resumeEl.hidden = false; walk.paused = true; keys.clear(); } }
@@ -1930,8 +2075,8 @@ document.addEventListener('pointerlockchange', () => {
   if (walk.locked) { walk.everLocked = true; hideResume(); return; }
   if (walk.releasing) { walk.releasing = false; return; }
   if (mode !== 'walk' || walk.holdLock) return;
-  // Esc releases the mouse: treat it as "back to the main menu". Losing focus (alt-tab) just pauses.
-  if (document.hasFocus()) goToMainMenu();
+  // Esc releases the mouse: back to drag-look. Losing focus (alt-tab) just pauses.
+  if (document.hasFocus()) { walk.lockMode = false; reflectMode(); toast('Mouse free. Drag to look, click where you want to go. Press L to lock again.'); }
   else showResume();
 });
 document.addEventListener('pointerlockerror', onLockError);
@@ -1946,30 +2091,32 @@ function releasePointer() {
 function resumeWalk() {
   if (mode !== 'walk') return;
   walk.paused = false;
-  requestLock();
+  if (walk.lockMode) requestLock();
 }
 
 // Buttons
 document.getElementById('startTour').addEventListener('click', startTour);
 document.getElementById('freeExplore').addEventListener('click', explore);
-document.getElementById('menuWalk').addEventListener('click', enterWalk);
+document.getElementById('menuWalk').addEventListener('click', () => enterWalk());
 document.getElementById('btnTour').addEventListener('click', startTour);
 document.getElementById('btnExplore').addEventListener('click', explore);
-document.getElementById('btnWalk').addEventListener('click', enterWalk);
+document.getElementById('btnWalk').addEventListener('click', () => enterWalk());
 document.getElementById('btnMenu').addEventListener('click', goToMainMenu);
 document.getElementById('hudMenu').addEventListener('click', goToMainMenu);
 if (coarse) { document.getElementById('btnWalk').hidden = true; document.getElementById('menuWalk').hidden = true; }
 
 // Keyboard
 addEventListener('keydown', (e) => {
-  if (e.defaultPrevented || typing(e)) return;
+  if (e.defaultPrevented || typing(e) || cinematic) return;
   if (e.code === 'Escape') { goToMainMenu(); return; }
   if (e.code === 'KeyF' && !e.repeat && !flight) { mode === 'walk' ? leaveWalk(false) : enterWalk(); return; }
+  if (e.code === 'KeyL' && !e.repeat && mode === 'walk' && walk.active) { toggleLock(); return; }
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
   if (mode === 'walk') {
     if (walk.paused) return;
     if (e.code === 'Space' && !e.repeat) walk.jumpQueued = true;
     if (e.code === 'KeyE' && !e.repeat) interact();
+    if ((e.code === 'KeyT' || e.code === 'KeyP') && !e.repeat && walk.focus?.tree && sponsor) { e.code === 'KeyP' ? walk.focus.pick() : sponsor.open(walk.focus.tree); }
     hideCoachSoon();
   } else if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'KeyE', 'KeyQ', 'ShiftLeft', 'ShiftRight'].includes(e.code)) {
     exploreInput();
@@ -1987,23 +2134,50 @@ function hideCoachSoon() { clearTimeout(coachTimer); coachTimer = setTimeout(hid
 const EYE = 1.62, RAD = 0.28, STEP = 0.42, GRAV = 22, JUMP = 7.4, HEAD = 1.8;
 const walk = {
   active: false, paused: false, locked: false, lockFailed: false, everLocked: false, releasing: false, holdLock: false,
-  yaw: 0, pitch: 0, keys, drag: null,
+  // Drag to look is the default (no pointer lock); L or the HUD button locks the mouse for smooth look.
+  lockMode: false,
+  yaw: 0, pitch: 0, keys, drag: null, down: null,
   feet: new THREE.Vector3(), vel: new THREE.Vector3(), vy: 0, grounded: true, eyeY: 0, bob: 0, jumpQueued: false,
   focus: null, panelAt: null,
+  goal: null, goalStuck: 0, goalLast: new THREE.Vector3(), goalLabel: '',
 };
+// Walk to a point on the ground (click to go, or "Walk me there")
+function walkTo(p, label = '') {
+  if (mode !== 'walk' || !walk.active) return;
+  walk.goal = new THREE.Vector3(p.x, 0, p.z);
+  walk.goalStuck = 0; walk.goalLast.copy(walk.feet); walk.goalLabel = label;
+}
+function stopWalkTo() { walk.goal = null; }
 function walkPointerDown(e) {
+  if (walk.active && walk.paused && walk.panelAt && !sponsor?.isOpen) { closePanel(); return; }
   if (!walk.active || walk.paused) return;
   if (walk.locked) { if (e.button === 0) interact(); return; }
-  if (!walk.lockFailed) { requestLock(); return; }
+  if (walk.lockMode && !walk.lockFailed) { requestLock(); return; }
   walk.drag = { x: e.clientX, y: e.clientY };
+  walk.down = { x: e.clientX, y: e.clientY, button: e.button, moved: 0 };
   capture(e);
 }
 function walkPointerMove(e) {
   if (!walk.active || walk.locked || !walk.drag) return;
-  walk.yaw -= (e.clientX - walk.drag.x) * 0.004;
-  walk.pitch = THREE.MathUtils.clamp(walk.pitch - (e.clientY - walk.drag.y) * 0.004, -1.35, 1.35);
+  const dx = e.clientX - walk.drag.x, dy = e.clientY - walk.drag.y;
+  if (walk.down) walk.down.moved += Math.abs(dx) + Math.abs(dy);
+  walk.yaw -= dx * 0.004;
+  walk.pitch = THREE.MathUtils.clamp(walk.pitch - dy * 0.004, -1.35, 1.35);
   walk.drag = { x: e.clientX, y: e.clientY };
 }
+// A click (not a drag) in drag-look mode: use what you are looking at, or walk to the spot you clicked
+function walkPointerUp(e) {
+  const d = walk.down; walk.down = null;
+  if (!d || !walk.active || walk.paused || walk.locked || d.moved > 6 || d.button !== 0) return;
+  if (walk.focus) { interact(); return; }
+  if (quest?.step && quest.near()) { stepAction(quest.step); return; }
+  const p = pickPoint(e.clientX, e.clientY, 60);
+  if (!p) return;
+  if (p.y - height(p.x, p.z) > 2.6) { toast('Click on the ground to walk there.'); return; }
+  walkTo(p);
+  juice?.sfx.tap();
+}
+canvas.addEventListener('pointerup', (e) => { if (mode === 'walk') walkPointerUp(e); });
 canvas.addEventListener('mousemove', (e) => {
   if (mode !== 'walk' || !walk.active || walk.paused || !walk.locked) return;
   walk.yaw -= e.movementX * 0.0022;
@@ -2060,6 +2234,22 @@ function updateWalk(dt) {
   let fwd = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0);
   let side = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0);
   if (walk.paused) fwd = side = 0;
+  // Auto-walk to a clicked spot or the next checkpoint; any key takes over
+  if (walk.goal) {
+    if (fwd || side) walk.goal = null;
+    else {
+      const gx = walk.goal.x - f.x, gz = walk.goal.z - f.z, gd = Math.hypot(gx, gz);
+      if (gd < 0.7) { walk.goal = null; }
+      else {
+        const want = Math.atan2(-gx, -gz);
+        if (!walk.drag) walk.yaw += wrapAngle(want - walk.yaw) * (1 - Math.exp(-dt * 4));
+        const fx0 = -Math.sin(walk.yaw), fz0 = -Math.cos(walk.yaw);
+        fwd = (gx * fx0 + gz * fz0) / gd; side = (gx * -fz0 + gz * fx0) / gd;
+        if (f.distanceTo(walk.goalLast) < 0.05 * Math.max(1, dt * 60)) walk.goalStuck += dt; else { walk.goalStuck = 0; walk.goalLast.copy(f); }
+        if (walk.goalStuck > 1.4) { walk.goal = null; toast('Something is in the way. Walk around it, or click a clearer spot.'); }
+      }
+    }
+  }
   const len = Math.hypot(fwd, side) || 1;
   const fx = -Math.sin(walk.yaw), fz = -Math.cos(walk.yaw);
   const speed = run ? 7.5 : 3.8;
@@ -2126,12 +2316,28 @@ function updateFocus() {
 function interact() {
   if (!walk.active) return;
   if (walk.panelAt) { closePanel(); return; }
-  walk.focus?.act();
+  if (walk.focus) { walk.focus.act(); return; }
+  if (quest?.step && quest.near()) stepAction(quest.step);
+}
+// What a path step wants you to do here, done directly (from the card button, or E inside the circle)
+function stepAction(s) {
+  if (!s) return;
+  const id = s.match?.[0];
+  if (s.event === 'hotspot' && id) { mode === 'walk' ? showInfo(HOTSPOTS.find((h) => h.id === id)) : openHotspot(id, true); return; }
+  if (s.event === 'info' && id) { showInfo(INFO[id] || HOTSPOTS.find((h) => h.id === id)); return; }
+  if (s.event === 'sponsor') { const t = trees.find((x) => !sponsor.funded(x.id)) || trees[0]; if (mode === 'walk') sponsor.open(t); else sponsorAny(); return; }
+  if (s.event === 'tour') { startTour(); return; }
+  if (s.event === 'fund') { fund.open(s.match?.[0] || 'tank'); return; }
+  if (s.event === 'pick') { toast(`Look at a tree and press P${s.count ? ` (${s.count} times)` : ''}.`); return; }
+  if (s.event === 'truck' || s.event === 'share') { toast(basketCount() ? 'Look at it and press E.' : 'Your basket is empty. Pick fruit first (P at a tree).'); return; }
+  if (s.event === 'door') { toast('Look at the door and press E.'); return; }
+  if (s.event === 'quiz') { toast('Open any numbered dot and answer the question at the bottom of the panel.'); }
 }
 
 // Harvest basket: pick fruit in the orchard, then load the truck or share it at lunch
+const askedKinds = new Set();
 const basket = { mango: 0, orange: 0, cashew: 0 };
-let sold = 0;
+let sold = 0, pickedTotal = Number((() => { try { return localStorage.getItem('wos.picked') || 0; } catch { return 0; } })());
 const basketEl = document.getElementById('basket');
 const basketCount = () => basket.mango + basket.orange + basket.cashew;
 function renderBasket() {
@@ -2143,7 +2349,20 @@ function renderBasket() {
 function pickFruit(kind) {
   if (basketCount() >= 12) { toast('Your basket is full. Take it to the truck by the road, or to the community tables.'); return; }
   basket[kind]++;
+  pickedTotal++;
+  try { localStorage.setItem('wos.picked', String(pickedTotal)); } catch { /* storage blocked */ }
   renderBasket();
+  if (juice) {
+    const at = walk.focus?.pos || camera.position.clone().addScaledVector(camera.getWorldDirection(new THREE.Vector3()), 2);
+    const col = { mango: 0xffb020, cashew: 0xf2884a, orange: 0xff8a1f }[kind];
+    juice.burst(at, col, 16);
+    juice.floatText(at, `+1 ${kind === 'orange' ? 'orange' : kind}`);
+    juice.sfx.pick();
+  }
+  emit('pick', kind);
+  // One question about the fruit in your hand, the first time you pick each kind
+  const qid = kind === 'orange' ? 'citrus' : 'mango';
+  if (!askedKinds.has(qid)) { askedKinds.add(qid); setTimeout(() => quiz?.prompt(qid, `You just picked ${kind === 'orange' ? 'an orange' : `a ${kind}`}`), 900); }
   if (basketCount() === 1) toast('Picked! Load fruit onto the truck to sell it, or share it at the community tables.');
 }
 function clearBasket() { basket.mango = basket.orange = basket.cashew = 0; renderBasket(); }
@@ -2155,7 +2374,7 @@ function toast(msg) {
   toastEl.hidden = false;
   toastEl.classList.remove('show'); void toastEl.offsetWidth; toastEl.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => (toastEl.hidden = true), 3600);
+  toastTimer = setTimeout(() => (toastEl.hidden = true), 6500);
 }
 
 // ---------------------------------------------------------------------------
@@ -2180,6 +2399,20 @@ function pickPoint(clientX, clientY, maxDist = 400) {
   if (hit) return hit.point.clone();
   const q = terrainHit(raycaster.ray, maxDist);
   return q;
+}
+// Sponsorable tree under a screen position: nearest canopy the ray passes through.
+const _sph = new THREE.Sphere(), _hit = new THREE.Vector3();
+function treeAt(clientX, clientY, maxDist = 260) {
+  _ndc.set((clientX / innerWidth) * 2 - 1, -(clientY / innerHeight) * 2 + 1);
+  raycaster.setFromCamera(_ndc, camera);
+  let best = null, bestD = maxDist;
+  for (const t of trees) {
+    _sph.center.set(t.x, t.cy, t.z); _sph.radius = t.r;
+    if (!raycaster.ray.intersectSphere(_sph, _hit)) continue;
+    const d = _hit.distanceTo(camera.position);
+    if (d < bestD) { bestD = d; best = t; }
+  }
+  return best;
 }
 // Walk mode: what the crosshair is on (or a spot just ahead of you).
 function aimPoint(maxDist = 30) {
@@ -2223,17 +2456,24 @@ function updateHotspots() {
 function animate() {
   const dt = Math.min(clock.getDelta(), 0.05);
   const t = clock.elapsedTime;
-  updateFlight(dt);
-  updateDoors(dt);
-  if (!flight) {
-    if (mode === 'walk') { if (walk.active) updateWalk(dt); }
-    else { updateExplore(dt); fovTarget = 50; }
+  if (cinematic) cinematic.update(dt, t);
+  else {
+    updateFlight(dt);
+    if (!flight) {
+      if (mode === 'walk') { if (walk.active) updateWalk(dt); }
+      else { updateExplore(dt); fovTarget = 50; }
+    }
+    if (Math.abs(camera.fov - fovTarget) > 0.01) { camera.fov = damp(camera.fov, fovTarget, 5, dt); camera.updateProjectionMatrix(); }
   }
-  if (Math.abs(camera.fov - fovTarget) > 0.01) { camera.fov = damp(camera.fov, fovTarget, 5, dt); camera.updateProjectionMatrix(); }
+  updateDoors(dt);
   animatePeople(t, dt);
   if (FLAG) FLAG.rotation.y = Math.sin(t * 1.4) * 0.12 + Math.sin(t * 3.1) * 0.04;
   updateHotspots();
-  renderer.render(scene, camera);
+  if (sponsor) { sponsor.update(dt, t); sponsor.place(); }
+  if (fund) fund.place();
+  if (quest) quest.update(dt, t);
+  if (juice) juice.update(dt);
+  if (composer) composer.render(); else renderer.render(scene, camera);
   requestAnimationFrame(animate);
 }
 
@@ -2241,10 +2481,28 @@ addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
+  composer?.setSize(innerWidth, innerHeight);
 });
 
-// Deep link: #mango opens that hotspot
-if (location.hash.length > 1) setTimeout(() => openHotspot(location.hash.slice(1), true), 400);
+// Deep links: #mango opens that hotspot; #sponsor=mango-1-1 flies to that tree and opens its sponsor card
+if (location.hash.startsWith('#fund=')) {
+  const id = location.hash.slice(6);
+  setTimeout(() => { hideMenu(); flyToPoint(new THREE.Vector3(12, 6, -24), 18); setTimeout(() => fund.open(id), 1800); }, 600);
+} else if (location.hash.startsWith('#sponsor=')) {
+  const id = decodeURIComponent(location.hash.slice(9));
+  setTimeout(() => { const t = trees.find((x) => x.id === id); if (t) { hideMenu(); flyToTree(t); sponsor.hover(t, true); setTimeout(() => sponsor.open(t), 1600); } }, 600);
+} else if (location.hash.length > 1 && location.hash !== '#intro') setTimeout(() => openHotspot(location.hash.slice(1), true), 400);
+
+// Funnel instrumentation: every bus event plus a few milestones, kept in this browser (?stats prints them)
+const events = (() => { try { return JSON.parse(localStorage.getItem('wos.events') || '[]'); } catch { return []; } })();
+function track(name, detail) {
+  events.push({ t: Date.now(), name, detail: typeof detail === 'string' || typeof detail === 'number' ? detail : undefined });
+  while (events.length > 500) events.shift();
+  try { localStorage.setItem('wos.events', JSON.stringify(events)); } catch { /* storage blocked */ }
+}
+for (const ev of ['hotspot', 'info', 'walk', 'tour', 'pick', 'truck', 'share', 'sponsor', 'door', 'quiz', 'apply', 'arrive', 'fund']) on(ev, (d) => track(ev, d));
+track('load', location.search);
+if (location.search.includes('stats')) setTimeout(() => console.table(events.slice(-60)), 1500);
 
 initComments({
   THREE, scene, camera, canvas, height,
@@ -2258,8 +2516,80 @@ initComments({
   },
 });
 
-if (location.search.includes('debug')) window.__dbg = { walk, view, camera, doors, interactables, solids, enterWalk, leaveWalk, goToMainMenu, get mode() { return mode; } };
+// ---------------------------------------------------------------------------
+// Game layer: roles, tree sponsorship and the cinematic intro
+// ---------------------------------------------------------------------------
+juice = initJuice({ THREE, scene, camera });
+fund = initFund({ THREE, camera, canvas, getMode: () => mode, releasePointer, resumeWalk, toast, emit, hideMenu, flyToPoint, juice });
+sponsor = initSponsor({ THREE, scene, camera, canvas, height, trees, getMode: () => mode, releasePointer, resumeWalk, toast, emit, flyToTree, juice });
+const sponsorAny = () => { const t = trees.find((x) => !sponsor.funded(x.id)) || trees[0]; hideMenu(); flyToTree(t); sponsor.hover(t, true); setTimeout(() => sponsor.open(t), 1500); };
+const apply = initApply({ getMode: () => mode, releasePointer, resumeWalk, toast, emit, hideMenu, showMenu, sponsorAny, getRole: () => roles?.role });
+roles = initRoles({
+  on, toast,
+  onPicked: (id) => onRolePicked(id),
+  apply: () => apply.open(),
+  action: (what) => { if (what === 'sponsor') sponsorAny(); if (what === 'quiz') quiz?.openCert(); },
+});
+quiz = initQuiz({
+  getMode: () => mode, releasePointer, resumeWalk, toast, emit, hideMenu, getRole: () => roles?.role, setExtra: (t) => roles?.setExtra(t), juice,
+  impact: () => ({ trees: trees.filter((t) => sponsor.funded(t.id)?.share >= 0.999).length, fruit: pickedTotal }),
+});
+quest = initQuest({
+  THREE, scene, camera, roles, interactables, trees, emit, toast, hideMenu, flyToPoint, stepAction: (s) => stepAction(s), walkTo, juice,
+  getMode: () => mode, isWalkActive: () => mode === 'walk' && walk.active, feet: () => walk.feet,
+  groundAt: (x, z) => supportAt(x, z, height(x, z) + 0.45),
+  sponsorFunded: (id) => sponsor.funded(id),
+});
+// Students start on foot at the school gate with the first stop lit; others land on the menu.
+const GATE = { x: 6, z: 27, yaw: 0 };
+function onRolePicked(id) {
+  if (id === 'student' && !coarse) { hideMenu(); closePanel(); enterWalk(GATE); quest.start(); }
+  else { showMenu(); if (id) quest.start(); }
+}
+tutorial = initTutorial({ THREE, camera, beginCinematic, endCinematic, sponsorHover: (t, pin) => sponsor.hover(t, pin), treeById: (id) => sponsor.treeById(id) });
+
+// After the intro: pick a role the first time, then land on the menu.
+function afterIntro() {
+  showMenu();
+  present?.introDone();
+  roles.show(onRolePicked);
+}
+document.getElementById('replayIntro').addEventListener('click', () => tutorial.play({ onDone: afterIntro }));
+
+// Presentation mode: ?present (clicker keys, jump menu, big captions, seeded demo data); ?present=120 adds a kiosk reset.
+const closeAll = () => { sponsor.close(); apply.close(); fund.close(); quiz.closeCert(); roles.hide(); closePanel(); if (tourIdx >= 0) endTour(); };
+const present = new URLSearchParams(location.search).has('present') ? initPresent({
+  tutorial, roles, sponsor, quiz, apply, sponsorAny, openHotspot, startTour, enterWalk, goToMainMenu, showMenu, closeAll,
+  isWalking: () => mode === 'walk' && walk.active && !walk.paused,
+  anyOpen: () => sponsor.isOpen || apply.isOpen || !panel.hidden || roles.picking,
+  tourActive: () => tourIdx >= 0,
+  tourStep: (dir) => (dir > 0 ? (tourIdx === TOUR.length - 1 ? endTour() : showTourStep(tourIdx + 1)) : showTourStep(tourIdx - 1)),
+}) : null;
+document.getElementById('changeRole').addEventListener('click', () => { hideMenu(); roles.show(onRolePicked); });
+document.getElementById('sponsorFromMenu').addEventListener('click', sponsorAny);
+document.getElementById('applyFromMenu').addEventListener('click', () => apply.open());
+document.getElementById('hudLock').addEventListener('click', toggleLock);
+{
+  const sb = document.getElementById('toggleSound'), mb = document.getElementById('toggleMotion');
+  const paint = () => { sb.textContent = `Sound: ${juice.sound ? 'on' : 'off'}`; mb.textContent = `Motion: ${juice.reduced ? 'reduced' : 'full'}`; };
+  sb.addEventListener('click', () => { juice.setSound(!juice.sound); paint(); if (juice.sound) juice.sfx.tap(); });
+  mb.addEventListener('click', () => { juice.setReduced(!juice.reduced); paint(); });
+  paint();
+}
+
+if (location.search.includes('debug')) window.__dbg = { walk, view, camera, doors, interactables, solids, trees, enterWalk, leaveWalk, goToMainMenu, tutorial, roles, sponsor, quiz, quest, juice, fund, walkTo, openHotspot, present, events, composer, get mode() { return mode; } };
 
 reflectMode();
 animate();
-requestAnimationFrame(() => document.getElementById('loader').classList.add('done'));
+requestAnimationFrame(() => {
+  document.getElementById('loader').classList.add('done');
+  const force = location.search.includes('intro') || location.hash === '#intro' || !!present; // the stage always opens with the intro
+  const deepLink = location.hash.length > 1 && location.hash !== '#intro';
+  if (location.hash.startsWith('#sponsor=') || location.hash.startsWith('#fund=')) hideMenu();
+  if ((force || !tutorial.seen()) && !deepLink) {
+    hideMenu();
+    setTimeout(() => tutorial.play({ onDone: afterIntro }), 450);
+  } else if (!roles.role && !deepLink) {
+    roles.show(onRolePicked);
+  }
+});

@@ -36,7 +36,7 @@ body.cm-panel-open .cm-pop { right: 502px; }
 
 .cm-switch { display: flex; align-items: center; gap: 10px; margin: 12px 2px 4px; font-size: 13px; color: var(--ink); cursor: pointer; user-select: none; }
 .cm-switch-input { position: absolute; opacity: 0; width: 1px; height: 1px; }
-.cm-switch-track { position: relative; flex: none; width: 34px; height: 20px; border-radius: 999px; background: rgba(31, 59, 44, 0.2); transition: background .25s var(--ease-out); }
+.cm-switch-track { position: relative; flex: none; width: 34px; height: 20px; border-radius: 20px; background: rgba(31, 59, 44, 0.2); transition: background .25s var(--ease-out); }
 .cm-switch-track::after { content: ''; position: absolute; left: 3px; top: 3px; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); transition: transform .25s var(--ease-out); }
 .cm-switch-input:checked + .cm-switch-track { background: var(--green-2); }
 .cm-switch-input:checked + .cm-switch-track::after { transform: translateX(14px); }
@@ -76,7 +76,7 @@ body.cm-card-open .walk-hud.aim .crosshair { transform: none; background: rgba(2
 .cm-hint {
   position: fixed; left: 50%; top: 72px; transform: translateX(-50%); z-index: 19; display: flex; align-items: center; gap: 8px;
   font: 600 13px var(--sans); color: #fff; background: rgba(18, 32, 24, 0.78); backdrop-filter: blur(6px);
-  padding: 8px 14px 8px 11px; border-radius: 999px; white-space: nowrap; pointer-events: none; animation: fadeDown var(--dur) var(--ease-out);
+  padding: 8px 14px 8px 11px; border-radius: var(--pill); white-space: nowrap; pointer-events: none; animation: fadeDown var(--dur) var(--ease-out);
 }
 .cm-hint svg { width: 16px; height: 16px; color: var(--mango); }
 
@@ -111,7 +111,7 @@ body.cm-card-open .walk-hud.aim .crosshair { transform: none; background: rgba(2
 }
 .cm-initial { transition: opacity .2s var(--ease-out); }
 .cm-n {
-  position: absolute; right: -3px; top: -3px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 999px;
+  position: absolute; right: -3px; top: -3px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: var(--pill);
   display: grid; place-items: center; font: 700 10px var(--sans); color: var(--cream); background: var(--green-2);
   box-shadow: 0 0 0 1.5px var(--cream);
 }
